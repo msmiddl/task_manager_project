@@ -9,8 +9,8 @@ No optional or non-goal features are included. REQ-09 is isolated from the core 
 ### T01 — Confirm the repository baseline
 
 - **Requirement IDs supported:** Project-wide support
-- **Description:** Confirm that the project is being developed inside the correct Git repository. Record the current branch and existing files before adding application code. Do not change or remove unrelated student files.
-- **Files expected to change:** None, unless a missing root `README.md` must be created as a placeholder
+- **Description:** Confirm that the project is being developed inside the correct Git repository. Record the current branch and existing files before adding application code. Confirm that the existing `README.md` and approved project documents are present. Do not change or remove unrelated student files.
+- **Files expected to change:** None
 - **Dependencies on earlier tasks:** None
 - **Verification method:** Run repository-status and file-list commands from the project root; confirm that the intended repository and branch are shown.
 - **Completion criteria:** The student can identify the project root, active branch, and existing files, and no unrelated work has been overwritten.
@@ -53,10 +53,10 @@ The first vertical slice implements one complete profile-creation path:
 ### T05 — Validate and create a profile through core logic
 
 - **Requirement IDs supported:** REQ-01
-- **Description:** Add core behavior for validating usernames and coordinating profile creation with storage. Enforce 2–30 total characters, reject empty or whitespace-only values, preserve capitalization and spaces, and reject only exact duplicates. Creating a profile must not select it as the current user.
+- **Description:** Add core behavior for validating usernames and coordinating profile creation with storage. Enforce 2–30 total characters, reject empty or whitespace-only values, preserve capitalization and spaces, and reject only exact duplicates. Profile creation does not include current-user selection; that separate interface behavior begins in T07.
 - **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
 - **Dependencies on earlier tasks:** T04
-- **Verification method:** Automated tests cover lengths 1, 2, 30, and 31; blank and whitespace-only values; `Alex` versus `alex`; exact duplicates; and an unchanged current-user value.
+- **Verification method:** Automated tests cover lengths 1, 2, 30, and 31; blank and whitespace-only values; `Alex` versus `alex`; and exact duplicates. No current-user session state is introduced by this task.
 - **Completion criteria:** Valid profiles are created through core logic, invalid profiles do not change storage, and all profile core tests pass.
 
 ### T06 — Complete the profile-creation vertical slice in Streamlit
@@ -73,11 +73,11 @@ The first vertical slice implements one complete profile-creation path:
 ### T07 — Select the current user for the active session
 
 - **Requirement IDs supported:** REQ-02
-- **Description:** Display existing profiles in a Streamlit selection control and store the chosen user identifier in session state. Show the required empty state when no profiles exist. Do not automatically select a newly created profile, and do not persist the selection after application restart.
-- **Files expected to change:** `app.py`, `tests/test_workflow.py`
+- **Description:** Display existing profiles in a Streamlit selection control and store the chosen user identifier in session state. Show the required empty state when no profiles exist. Do not automatically select a newly created profile, and do not persist the selection after application restart. If a session identifier no longer matches an existing profile or profiles cannot be loaded, clear the selection and display the approved error.
+- **Files expected to change:** `app.py`, `tests/test_storage.py`, `tests/test_workflow.py`
 - **Dependencies on earlier tasks:** T06
-- **Verification method:** Begin a workflow test that creates two profiles and confirms both exist. Manually select each profile, refresh through normal Streamlit interactions, and restart the application to confirm the selection resets.
-- **Completion criteria:** A valid existing profile can be selected for the active session, no-profile behavior is clear, and restarting requires a new selection.
+- **Verification method:** Begin a workflow test that creates two profiles and confirms both exist. Add a storage test for a nonexistent profile identifier. Manually select each profile, test an invalid or stale session identifier, simulate a profile-load failure, refresh through normal Streamlit interactions, and restart the application to confirm the selection resets.
+- **Completion criteria:** A valid existing profile can be selected for the active session; no-profile, missing-profile, and load-error behavior is clear; invalid selections are cleared; and restarting requires a new selection.
 
 ### T08 — Store groups and creator memberships
 
@@ -248,7 +248,7 @@ The first vertical slice implements one complete profile-creation path:
 - **Requirement IDs supported:** REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-06, REQ-07, REQ-08
 - **Description:** Finish one integration test using a temporary database: create Alex and Jordan, create Roommates as Alex, add Jordan, create a task for Jordan, reject Alex’s completion attempt, switch to Jordan, verify the assignment marker, complete the task, reconnect, and confirm persistence.
 - **Files expected to change:** `tests/test_workflow.py`
-- **Dependencies on earlier tasks:** T20, T24
+- **Dependencies on earlier tasks:** T12, T15, T17, T20, T24
 - **Verification method:** Run the workflow test alone and then with the full test suite.
 - **Completion criteria:** The complete non-interface MVP flow passes from a clean temporary database and remains correct after reconnecting.
 

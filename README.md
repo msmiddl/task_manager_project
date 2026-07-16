@@ -29,9 +29,9 @@ The approved MVP plans to include:
 - Label tasks assigned to the current user
 - Allow only the selected assignee profile to mark a task complete
 - Keep profiles, groups, memberships, and tasks after the application closes
-- Request an optional AI-generated username suggestion
+- Request an AI-generated username suggestion as an optional user action
 
-These are planned features. Their implementation status must be verified against the code and tests before they are described as working.
+These are planned features. Implementing the AI suggestion is required for the MVP, although a person may choose not to request a suggestion while using TaskHub. Feature implementation status must be verified against the code and tests before any feature is described as working.
 
 ## Current status
 
@@ -66,6 +66,7 @@ task_manager_project/
 │   ├── core.py
 │   └── storage.py
 ├── tests/
+│   ├── __init__.py
 │   ├── test_ai_service.py
 │   ├── test_core.py
 │   ├── test_storage.py

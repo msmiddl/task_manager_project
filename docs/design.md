@@ -300,6 +300,8 @@ TaskHub will use Python’s standard `unittest` library. No additional testing f
 - Group access and the current-user assignment marker.
 - Valid, invalid, blank, long, and duplicate AI suggestions using existing usernames passed as test input.
 
+Current-user selection is primarily interface-session behavior. Its missing-profile cases will be verified by a storage test for a nonexistent profile identifier and a manual interface check that clears an invalid or stale session selection and displays a user-not-found or load error.
+
 ### 8.2 Storage tests
 
 `tests/test_storage.py` will use a new temporary SQLite database for each test and verify:
@@ -386,6 +388,7 @@ task_manager_project/
 │   ├── core.py
 │   └── storage.py
 ├── tests/
+│   ├── __init__.py
 │   ├── test_ai_service.py
 │   ├── test_core.py
 │   ├── test_storage.py
@@ -406,7 +409,7 @@ The local database file and API key configuration must be excluded from version 
 | Requirement | Responsible component | Expected test file |
 | --- | --- | --- |
 | REQ-01 Create profile | `core.py`, `storage.py`, profile interface in `app.py` | `test_core.py`, `test_storage.py` |
-| REQ-02 Select current user | Session state and profile interface in `app.py`; profile existence from `storage.py` | `test_workflow.py`, manual interface checklist |
+| REQ-02 Select current user | Session state and profile interface in `app.py`; profile existence from `storage.py` | `test_storage.py`, `test_workflow.py`, manual interface checklist |
 | REQ-03 Display/create groups | `core.py`, `storage.py`, group interface in `app.py` | `test_core.py`, `test_storage.py`, `test_workflow.py` |
 | REQ-04 Add group member | `core.py`, `storage.py`, member interface in `app.py` | `test_core.py`, `test_storage.py`, `test_workflow.py` |
 | REQ-05 Create assigned task | `core.py`, `storage.py`, task interface in `app.py` | `test_core.py`, `test_storage.py`, `test_workflow.py` |

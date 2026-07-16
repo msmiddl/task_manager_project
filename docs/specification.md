@@ -2,7 +2,7 @@
 
 ## 1. Project overview
 
-TaskHub is a local group-task application. It allows people to create local user profiles, organize profiles into groups, create assigned tasks, view group work, and record task completion. It also offers an optional AI-generated username suggestion. The core application must remain usable when the AI service is unavailable.
+TaskHub is a local group-task application. It allows people to create local user profiles, organize profiles into groups, create assigned tasks, view group work, and record task completion. It also offers an AI-generated username suggestion that a person may choose whether to request. Implementing this suggestion feature is required for the MVP, but using it is optional. The core application must remain usable when the AI service is unavailable.
 
 This specification defines the approved capstone scope without password authentication, formal invitations, real-time synchronization, or cloud deployment.
 
@@ -219,7 +219,7 @@ The following are excluded from the MVP:
 
 **User value:** A group member needs to record a responsibility and identify who must complete it.
 
-**Description:** The application shall allow a group member to create a task in the selected group with a title of 1 to 20 non-whitespace characters, a description of 1 to 100 non-whitespace characters, and exactly one assignee who is already a group member. Every new task begins incomplete. A task cannot be created unassigned, assigned later, reassigned, edited, or deleted in the MVP.
+**Description:** The application shall allow a group member to create a task in the selected group with a title of 1 to 20 total characters that is not entirely whitespace, a description of 1 to 100 total characters that is not entirely whitespace, and exactly one assignee who is already a group member. Internal spaces are valid and count toward the character limit. Every new task begins incomplete. A task cannot be created unassigned, assigned later, reassigned, edited, or deleted in the MVP.
 
 **Preconditions:** A current user and one of that user's groups are selected.
 
