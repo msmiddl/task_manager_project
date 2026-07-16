@@ -1,0 +1,4 @@
+*.csv
+.env
+data/*.db
+my_secrets/
