@@ -5,14 +5,17 @@ from pathlib import Path
 from taskhub.core import (
     add_group_member_by_username,
     create_group,
+    create_assigned_task,
     create_profile,
     list_user_groups,
     validate_group_name,
+    validate_task_fields,
     validate_username,
 )
 from taskhub.storage import (
     add_group_member,
     initialize_storage,
+    get_task_by_id,
     list_group_members,
     list_users,
 )
@@ -311,6 +314,142 @@ class TestGroupMemberCore(unittest.TestCase):
             )
 
         self.assertEqual(self.member_names(), ["Alex", "Jordan"])
+
+
+class TestAssignedTaskCore(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.database_path = (
+            Path(self.temporary_directory.name) / "test_taskhub.db"
+        )
+        initialize_storage(self.database_path)
+        self.alex = create_profile(self.database_path, "Alex")
+        self.jordan = create_profile(self.database_path, "Jordan")
+        self.taylor = create_profile(self.database_path, "Taylor")
+        self.group = create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+        add_group_member(
+            self.database_path,
+            self.group["group_id"],
+            self.jordan["user_id"],
+        )
+
+    def tearDown(self):
+        self.temporary_directory.cleanup()
+
+    def test_task_field_boundaries_are_valid(self):
+        validate_task_fields("A", "B")
+        validate_task_fields("A" * 20, "B" * 100)
+
+    def test_task_fields_over_maximum_are_rejected(self):
+        invalid_fields = (
+            ("A" * 21, "Description", "title"),
+            ("Title", "B" * 101, "description"),
+        )
+
+        for title, description, field_name in invalid_fields:
+            with self.subTest(field=field_name):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    validate_task_fields(title, description)
+
+    def test_empty_and_whitespace_task_fields_are_rejected(self):
+        invalid_fields = (
+            ("", "Description", "title"),
+            ("   ", "Description", "title"),
+            ("Title", "", "description"),
+            ("Title", "   ", "description"),
+        )
+
+        for title, description, field_name in invalid_fields:
+            with self.subTest(field=field_name):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    create_assigned_task(
+                        self.database_path,
+                        self.group["group_id"],
+                        self.alex["user_id"],
+                        title,
+                        description,
+                        self.jordan["user_id"],
+                    )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
+    def test_missing_assignee_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "assignee"):
+            create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "Wash dishes",
+                "Wash and dry the dishes",
+                None,
+            )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
+    def test_nonmember_assignee_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "group member"):
+            create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "Wash dishes",
+                "Wash and dry the dishes",
+                self.taylor["user_id"],
+            )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
+    def test_nonmember_creator_is_rejected(self):
+        with self.assertRaisesRegex(PermissionError, "group member"):
+            create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.taylor["user_id"],
+                "Wash dishes",
+                "Wash and dry the dishes",
+                self.jordan["user_id"],
+            )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
+    def test_one_member_group_allows_self_assignment(self):
+        solo_group = create_group(
+            self.database_path,
+            "Solo",
+            self.taylor["user_id"],
+        )
+
+        task = create_assigned_task(
+            self.database_path,
+            solo_group["group_id"],
+            self.taylor["user_id"],
+            "Buy soap",
+            "Buy dish soap",
+            self.taylor["user_id"],
+        )
+
+        self.assertEqual(task["assignee_id"], self.taylor["user_id"])
+        self.assertEqual(task["status"], "incomplete")
+
+    def test_valid_task_is_created_incomplete(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+
+        self.assertEqual(task["group_id"], self.group["group_id"])
+        self.assertEqual(task["title"], "Wash dishes")
+        self.assertEqual(task["description"], "Wash and dry the dishes")
+        self.assertEqual(task["assignee_id"], self.jordan["user_id"])
+        self.assertEqual(task["status"], "incomplete")
 
 
 if __name__ == "__main__":

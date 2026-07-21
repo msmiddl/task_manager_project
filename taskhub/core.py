@@ -105,3 +105,65 @@ def add_group_member_by_username(
         int(user["user_id"]),
     )
     return user
+
+
+def validate_task_fields(title: str, description: str) -> None:
+    """Raise a clear error when task text breaks an approved rule."""
+    if not title or title.isspace():
+        raise ValueError("A task title is required.")
+    if len(title) > 20:
+        raise ValueError("The task title must contain 1 to 20 characters.")
+
+    if not description or description.isspace():
+        raise ValueError("A task description is required.")
+    if len(description) > 100:
+        raise ValueError(
+            "The task description must contain 1 to 100 characters."
+        )
+
+
+def create_assigned_task(
+    database_path: DatabasePath,
+    group_id: int,
+    current_user_id: int,
+    title: str,
+    description: str,
+    assignee_id: int | None,
+) -> storage.TaskRecord:
+    """Validate and save one task assigned to a group member."""
+    validate_task_fields(title, description)
+
+    if assignee_id is None:
+        raise ValueError("A task assignee is required.")
+
+    if not storage.is_group_member(
+        database_path,
+        group_id,
+        current_user_id,
+    ):
+        raise PermissionError(
+            "Only a group member can create a task in that group."
+        )
+
+    if not storage.is_group_member(
+        database_path,
+        group_id,
+        assignee_id,
+    ):
+        raise ValueError("The task assignee must be a group member.")
+
+    task_id = storage.create_assigned_task(
+        database_path,
+        group_id,
+        title,
+        description,
+        assignee_id,
+    )
+    return {
+        "task_id": task_id,
+        "group_id": group_id,
+        "title": title,
+        "description": description,
+        "assignee_id": assignee_id,
+        "status": "incomplete",
+    }
