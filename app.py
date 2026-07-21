@@ -75,6 +75,9 @@ try:
                 st.session_state.pop("selected_group_id", None)
                 st.session_state.pop("selected_group_selector", None)
                 st.session_state.pop("member_username", None)
+                st.session_state.pop("task_title", None)
+                st.session_state.pop("task_description", None)
+                st.session_state.pop("task_assignee_selector", None)
             st.session_state["current_user_id"] = selected_user_id
             active_user_id = selected_user_id
             selected_profile = profile_by_id[selected_user_id]
@@ -146,6 +149,12 @@ try:
                 if chosen_group_id is not None:
                     if chosen_group_id != selected_group_id:
                         st.session_state.pop("member_username", None)
+                        st.session_state.pop("task_title", None)
+                        st.session_state.pop("task_description", None)
+                        st.session_state.pop(
+                            "task_assignee_selector",
+                            None,
+                        )
                     st.session_state["selected_group_id"] = (
                         chosen_group_id
                     )
@@ -158,6 +167,7 @@ try:
             st.error(str(error))
 
     st.subheader("Group members")
+    group_members = []
 
     if active_group is None:
         st.info("Select a group to view its members.")
@@ -180,12 +190,12 @@ try:
                         f"Added group member: {added_member['username']}"
                     )
 
-            members = storage.list_group_members(
+            group_members = storage.list_group_members(
                 DATABASE_PATH,
                 int(active_group["group_id"]),
             )
 
-            for member in members:
+            for member in group_members:
                 st.write(member["username"])
         except (
             ValueError,
@@ -194,10 +204,59 @@ try:
             RuntimeError,
         ) as error:
             st.error(str(error))
+
+    st.subheader("Create task")
+
+    if active_group is None:
+        st.info("Select a group before creating a task.")
+    elif not group_members:
+        st.info("The selected group has no available assignees.")
+    else:
+        task_title = st.text_input("Task title", key="task_title")
+        task_description = st.text_area(
+            "Task description",
+            key="task_description",
+        )
+        member_by_id = {
+            member["user_id"]: member for member in group_members
+        }
+        assignee_ids = list(member_by_id)
+        selected_assignee_id = st.selectbox(
+            "Assignee",
+            options=assignee_ids,
+            index=None,
+            format_func=lambda user_id: member_by_id[user_id]["username"],
+            placeholder="Choose an assignee",
+            key="task_assignee_selector",
+        )
+
+        if st.button("Create task"):
+            try:
+                created_task = core.create_assigned_task(
+                    DATABASE_PATH,
+                    int(active_group["group_id"]),
+                    int(active_user_id),
+                    task_title,
+                    task_description,
+                    selected_assignee_id,
+                )
+                st.success(
+                    f"Created incomplete task: {created_task['title']}"
+                )
+            except (
+                ValueError,
+                LookupError,
+                PermissionError,
+                RuntimeError,
+            ) as error:
+                st.error(str(error))
 except RuntimeError as error:
     st.session_state.pop("current_user_id", None)
     st.session_state.pop("current_user_selector", None)
     st.session_state.pop("selected_group_id", None)
     st.session_state.pop("selected_group_selector", None)
     st.session_state.pop("member_username", None)
+    st.session_state.pop("task_title", None)
+    st.session_state.pop("task_description", None)
+    st.session_state.pop("task_assignee_selector", None)
     st.error(str(error))
