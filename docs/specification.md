@@ -78,9 +78,8 @@ The following are excluded from the MVP:
 - Real-time synchronization between users or devices.
 - Cloud deployment or remote access.
 - Notifications.
-- Due dates and priority levels.
 - Recurring tasks.
-- Calendar integration.
+- External calendar synchronization.
 - AI task assignment.
 - Member preferences and workload calculations.
 - Different permission models for roommate, family, or business groups.
@@ -416,12 +415,19 @@ The following are not part of the MVP or its Definition of Done:
 - Configurable group-owner and member permissions.
 - Task editing, deletion, assignment after creation, and reassignment.
 - Returning completed tasks to incomplete.
-- Task priorities and due dates.
 - Recurring tasks.
 - Notifications.
-- Calendar integration.
+- External calendar synchronization.
 - Real-time synchronization between devices.
 - Cloud deployment.
 - A more polished interface.
 
 Before any future feature is started, the MVP should meet its Definition of Done and pass its core tests.
+
+## 16. Approved post-MVP calendar enhancement
+
+Due dates, fixed priority levels, and an internal monthly calendar are now approved post-MVP scope. Their behavior and acceptance criteria are defined in [taskhub-calendar-priority-feature-spec.md](taskhub-calendar-priority-feature-spec.md).
+
+This approval does not add external calendar synchronization, reminders, due times, recurring tasks, task editing, reassignment, or any other previously excluded feature. Existing TaskHub permissions and one-way completion rules remain unchanged.
+
+The approved migration rule is that each task created before the enhancement receives the local calendar date on which migration runs as its fallback due date and receives `medium` priority. The migration must preserve every existing record and relationship.

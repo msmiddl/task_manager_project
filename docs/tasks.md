@@ -198,6 +198,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T21 — Add task completion controls to the interface
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-07
 - **Description:** Show completion controls only for the current user’s assigned incomplete tasks. Call core completion logic, reload the task list after success, and show already-complete or permission messages if the underlying state changed before submission.
 - **Files expected to change:** `app.py`
@@ -207,6 +208,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T22 — Isolate the Google AI request
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-09
 - **Description:** Add one AI-service function that reads the API key from the environment, sends a fixed username-only prompt, and returns raw suggestion text. Convert missing configuration and service failures into a controlled AI-unavailable error. Do not access storage or validate uniqueness in this file.
 - **Files expected to change:** `taskhub/ai_service.py`, `tests/test_ai_service.py`
@@ -216,6 +218,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T23 — Validate and display an AI username suggestion
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-09
 - **Description:** Add core validation for raw AI output using the existing usernames provided as input. Reject blank, whitespace-only, shorter-than-2, longer-than-30, and exact duplicate suggestions. Add a Streamlit action that displays a valid suggestion without creating a profile and displays a controlled error otherwise.
 - **Files expected to change:** `taskhub/core.py`, `app.py`, `tests/test_core.py`
@@ -227,6 +230,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T24 — Handle missing and corrupted storage safely
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-08
 - **Description:** Finalize storage startup behavior. A missing database becomes an empty first-use database. An existing file that cannot be opened or queried as valid TaskHub storage produces a controlled error and is not deleted, overwritten, or repaired.
 - **Files expected to change:** `taskhub/storage.py`, `tests/test_storage.py`
@@ -236,6 +240,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T25 — Complete interface empty states and safe error messages
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-06, REQ-07, REQ-08, REQ-09
 - **Description:** Review each interface action and ensure expected `ValueError`, `LookupError`, `PermissionError`, and `RuntimeError` messages are caught and displayed safely. Add missing profile, group, member, task, completion, storage, and AI empty/error states. Do not add a logging system.
 - **Files expected to change:** `app.py`
@@ -245,6 +250,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T26 — Complete the end-to-end workflow and persistence test
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-06, REQ-07, REQ-08
 - **Description:** Finish one integration test using a temporary database: create Alex and Jordan, create Roommates as Alex, add Jordan, create a task for Jordan, reject Alex’s completion attempt, switch to Jordan, verify the assignment marker, complete the task, reconnect, and confirm persistence.
 - **Files expected to change:** `tests/test_workflow.py`
@@ -256,6 +262,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T27 — Write setup, run, test, and privacy instructions
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-08, REQ-09 and project-wide delivery
 - **Description:** Document environment setup, dependency installation, application startup, test execution, API-key configuration, local-database behavior, reset session selections, the absence of authentication, and the rule not to enter sensitive information. Create the manual test checklist used in the final review.
 - **Files expected to change:** `README.md`, `docs/manual-test-checklist.md`
@@ -265,12 +272,98 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T28 — Run final requirement and demonstration checks
 
+- **Status:** Complete
 - **Requirement IDs supported:** REQ-01, REQ-02, REQ-03, REQ-04, REQ-05, REQ-06, REQ-07, REQ-08, REQ-09
 - **Description:** Run the complete automated suite, perform the manual interface and live-AI checklist, verify the two-minute demonstration, and compare the delivered behavior against the specification and traceability table. Fix only defects in approved behavior; do not add features.
 - **Files expected to change:** Any approved MVP file only if a verified defect is found; `docs/manual-test-checklist.md` for recorded results
 - **Dependencies on earlier tasks:** T27
 - **Verification method:** All automated tests pass, every manual checklist item has a result, the live AI failure path is also checked, and the demonstration completes within two minutes.
 - **Completion criteria:** Every requirement has passing evidence, no non-goal has been added, no API key or database file is tracked, and the project meets the specification’s Definition of Done.
+
+## Phase 7: Calendar and priority enhancement
+
+### T29 — Integrate the calendar enhancement into project documentation
+
+- **Status:** Complete
+- **Requirement IDs supported:** CAL-01, CAL-02, CAL-03, CAL-04, CAL-05, CAL-06, CAL-07
+- **Description:** Approve the feature supplement, remove conflicts with the original non-goals, record the migration fallback, extend the technical design, and add an ordered implementation plan. Do not change application code.
+- **Files expected to change:** `docs/specification.md`, `docs/design.md`, `docs/tasks.md`, `docs/taskhub-calendar-priority-feature-spec.md`
+- **Dependencies on earlier tasks:** T28
+- **Verification method:** Review all four documents for consistent scope, migration behavior, dependencies, and requirement traceability.
+- **Completion criteria:** The enhancement is approved, every CAL requirement maps to ordered tasks, and no implementation decision remains unresolved.
+
+### T30 — Migrate and store task scheduling fields
+
+- **Status:** Complete
+- **Requirement IDs supported:** CAL-01, CAL-02, CAL-03, CAL-07
+- **Description:** Add transactional, repeatable storage migration for `due_date` and `priority`. Preserve existing tasks, assign the local migration date and `medium` to old records, add storage constraints, and include both fields in task creation and retrieval.
+- **Files expected to change:** `taskhub/storage.py`, `tests/test_storage.py`
+- **Dependencies on earlier tasks:** T29
+- **Verification method:** Storage tests cover a new database, migration of an old database with tasks, preserved relationships and statuses, repeated initialization, all priorities, persistence, and controlled migration failure.
+- **Completion criteria:** Existing and new databases safely expose persistent due dates and priorities without data loss.
+
+### T31 — Validate dated and prioritized task creation
+
+- **Requirement IDs supported:** CAL-01, CAL-02
+- **Description:** Add core validation for required real ISO dates and lowercase priorities, then pass validated values through assigned-task creation. Allow past, current, future, and leap-day dates while rejecting missing or malformed values.
+- **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** T30
+- **Verification method:** Core tests cover missing values, invalid formats, nonexistent dates, leap-day boundaries, all priorities, unsupported capitalization, permissions, and successful incomplete task creation.
+- **Completion criteria:** Only tasks with one valid due date and supported priority reach storage, with existing creation rules unchanged.
+
+### T32 — Add scheduling inputs to task creation
+
+- **Requirement IDs supported:** CAL-01, CAL-02
+- **Description:** Add a required Streamlit date input and a Low/Medium/High priority selector defaulting to Medium. Submit normalized values through core and display safe errors without adding another interface or dependency.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** T31
+- **Verification method:** Manually create past, current, and future tasks at each priority; confirm the default and required-input behavior.
+- **Completion criteria:** A group member can create a dated, prioritized task through the existing form.
+
+### T33 — Retrieve scheduling data and calculate date states
+
+- **Requirement IDs supported:** CAL-03, CAL-04
+- **Description:** Include due date and priority in selected-group task results and add deterministic core calculation of `Overdue`, `Due today`, or no date label using a supplied local date. Completed tasks receive no date-state label.
+- **Files expected to change:** `taskhub/storage.py`, `taskhub/core.py`, `tests/test_storage.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** T31
+- **Verification method:** Tests cover group isolation, all date states, completed tasks, and recalculation with different supplied dates.
+- **Completion criteria:** Accessible task records contain both scheduling fields and the correct nonpersistent date-state result.
+
+### T34 — Display enhanced task-list fields and labels
+
+- **Requirement IDs supported:** CAL-03, CAL-04
+- **Description:** Display a consistent human-readable due date, visible priority text, and overdue/due-today text in the existing task list. Preserve current empty, assignment, completion, and error behavior.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** T32, T33
+- **Verification method:** Manually inspect incomplete past/today/future tasks and completed past tasks at multiple priorities.
+- **Completion criteria:** Every displayed task shows due date and priority, and only eligible incomplete tasks show a date-state label.
+
+### T35 — Filter selected-group tasks by calendar month
+
+- **Requirement IDs supported:** CAL-05
+- **Description:** Add a simple core function that returns selected-group tasks for a supplied year and month while reusing group-access rules. Do not mutate storage or add cross-group filtering.
+- **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** T33
+- **Verification method:** Tests cover ordinary months, empty months, month boundaries, December-to-January, leap years, both statuses, and nonmember rejection.
+- **Completion criteria:** Calendar data is deterministic, group-scoped, and read-only.
+
+### T36 — Add the internal monthly calendar and navigation
+
+- **Requirement IDs supported:** CAL-05, CAL-06
+- **Description:** Add Task list/Calendar view selection, a monthly grid built with standard-library calendar data, task details on due dates, empty-month messaging, and previous/next navigation in session state. Reset calendar state when user or group changes.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** T34, T35
+- **Verification method:** Manually verify placement, required entry details, empty months, December/January navigation, user/group switching, restart reset, and absence of data mutation.
+- **Completion criteria:** Members can safely view and navigate the selected group's calendar without changing saved tasks.
+
+### T37 — Complete calendar workflow, documentation, and final checks
+
+- **Requirement IDs supported:** CAL-01, CAL-02, CAL-03, CAL-04, CAL-05, CAL-06, CAL-07
+- **Description:** Extend the workflow test through dated prioritized creation, display, completion, and reopen; update README and the manual checklist; test migration on a copy of an existing database; and perform final requirement review.
+- **Files expected to change:** `tests/test_workflow.py`, `README.md`, `docs/manual-test-checklist.md`
+- **Dependencies on earlier tasks:** T30, T31, T34, T36
+- **Verification method:** Run focused and full suites, complete the calendar manual checklist, and verify a copied existing database upgrades without loss.
+- **Completion criteria:** CAL-01 through CAL-07 have passing automated and manual evidence, original behavior still passes, and documentation describes the enhancement accurately.
 
 ## Requirement-to-task traceability
 
@@ -285,3 +378,10 @@ The first vertical slice implements one complete profile-creation path:
 | REQ-07 — Mark an assigned task complete | T19, T20, T21, T25, T26, T28 |
 | REQ-08 — Retain application data | T04, T06, T08, T11, T14, T19, T24, T26, T27, T28 |
 | REQ-09 — Suggest an example username using AI | T02, T22, T23, T25, T27, T28 |
+| CAL-01 — Create a task with a due date | T29, T30, T31, T32, T37 |
+| CAL-02 — Create a task with a priority | T29, T30, T31, T32, T37 |
+| CAL-03 — Display due dates and priorities | T29, T30, T33, T34, T37 |
+| CAL-04 — Identify overdue and due-today tasks | T29, T33, T34, T37 |
+| CAL-05 — Display a monthly group calendar | T29, T35, T36, T37 |
+| CAL-06 — Navigate calendar months | T29, T36, T37 |
+| CAL-07 — Retain and migrate scheduling data | T29, T30, T37 |

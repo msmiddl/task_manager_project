@@ -1,6 +1,7 @@
 import sqlite3
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from taskhub.storage import (
@@ -20,6 +21,66 @@ from taskhub.storage import (
     list_users,
     open_connection,
 )
+
+
+def create_legacy_taskhub_database(database_path: Path) -> None:
+    """Create one valid pre-calendar TaskHub database for migration tests."""
+    with sqlite3.connect(database_path) as connection:
+        connection.executescript(
+            """
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE groups (
+                group_id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                creator_id INTEGER NOT NULL,
+                FOREIGN KEY (creator_id) REFERENCES users (user_id)
+            );
+            CREATE TABLE memberships (
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                PRIMARY KEY (group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups (group_id),
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            );
+            CREATE TABLE tasks (
+                task_id INTEGER PRIMARY KEY,
+                group_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                assignee_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'incomplete'
+                    CHECK (status IN ('incomplete', 'complete')),
+                FOREIGN KEY (group_id, assignee_id)
+                    REFERENCES memberships (group_id, user_id)
+            );
+            INSERT INTO users (user_id, username)
+            VALUES (1, 'Alex'), (2, 'Jordan');
+            INSERT INTO groups (group_id, name, creator_id)
+            VALUES (1, 'Roommates', 1);
+            INSERT INTO memberships (group_id, user_id)
+            VALUES (1, 1), (1, 2);
+            INSERT INTO tasks (
+                task_id,
+                group_id,
+                title,
+                description,
+                assignee_id,
+                status
+            )
+            VALUES (
+                1,
+                1,
+                'Wash dishes',
+                'Wash and dry the dishes',
+                2,
+                'complete'
+            );
+            """
+        )
 
 
 class TestUserStorage(unittest.TestCase):
@@ -322,6 +383,8 @@ class TestUserStorage(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             jordan_id,
+            "2026-07-25",
+            "high",
         )
 
         saved_task = get_task_by_id(self.database_path, task_id)
@@ -334,8 +397,188 @@ class TestUserStorage(unittest.TestCase):
                 "description": "Wash and dry the dishes",
                 "assignee_id": jordan_id,
                 "status": "incomplete",
+                "due_date": "2026-07-25",
+                "priority": "high",
             },
         )
+
+    def test_scheduled_task_fields_are_stored_and_retrieved(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Buy soap",
+            "Buy dish soap",
+            alex_id,
+            "2026-07-25",
+            "high",
+        )
+
+        initialize_storage(self.database_path)
+        saved_task = get_task_by_id(self.database_path, task_id)
+
+        self.assertEqual(saved_task["due_date"], "2026-07-25")
+        self.assertEqual(saved_task["priority"], "high")
+
+    def test_storage_accepts_only_approved_priorities(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        for priority in ("low", "medium", "high"):
+            with self.subTest(priority=priority):
+                task_id = create_assigned_task(
+                    self.database_path,
+                    group_id,
+                    f"Task {priority}",
+                    "Test the priority constraint",
+                    alex_id,
+                    "2026-07-25",
+                    priority,
+                )
+                self.assertEqual(
+                    get_task_by_id(self.database_path, task_id)[
+                        "priority"
+                    ],
+                    priority,
+                )
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            with open_connection(self.database_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO tasks (
+                        group_id,
+                        title,
+                        description,
+                        assignee_id,
+                        status,
+                        due_date,
+                        priority
+                    )
+                    VALUES (?, ?, ?, ?, 'incomplete', ?, ?)
+                    """,
+                    (
+                        group_id,
+                        "Urgent task",
+                        "Unsupported priority",
+                        alex_id,
+                        "2026-07-25",
+                        "urgent",
+                    ),
+                )
+
+    def test_tasks_table_rejects_missing_due_date(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            with open_connection(self.database_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO tasks (
+                        group_id,
+                        title,
+                        description,
+                        assignee_id,
+                        status,
+                        priority
+                    )
+                    VALUES (?, ?, ?, ?, 'incomplete', 'medium')
+                    """,
+                    (
+                        group_id,
+                        "Missing date",
+                        "The due date was omitted",
+                        alex_id,
+                    ),
+                )
+
+    def test_legacy_tasks_are_migrated_without_data_loss(self):
+        legacy_path = (
+            Path(self.temporary_directory.name) / "legacy_taskhub.db"
+        )
+        create_legacy_taskhub_database(legacy_path)
+
+        initialize_storage(legacy_path, date(2026, 7, 21))
+        migrated_task = get_task_by_id(legacy_path, 1)
+
+        self.assertEqual(
+            migrated_task,
+            {
+                "task_id": 1,
+                "group_id": 1,
+                "title": "Wash dishes",
+                "description": "Wash and dry the dishes",
+                "assignee_id": 2,
+                "status": "complete",
+                "due_date": "2026-07-21",
+                "priority": "medium",
+            },
+        )
+        self.assertEqual(
+            [member["username"] for member in list_group_members(legacy_path, 1)],
+            ["Alex", "Jordan"],
+        )
+
+        initialize_storage(legacy_path, date(2026, 8, 1))
+        repeated_task = get_task_by_id(legacy_path, 1)
+
+        self.assertEqual(repeated_task["due_date"], "2026-07-21")
+        self.assertEqual(repeated_task["priority"], "medium")
+
+    def test_failed_legacy_migration_rolls_back(self):
+        legacy_path = (
+            Path(self.temporary_directory.name) / "blocked_legacy.db"
+        )
+        create_legacy_taskhub_database(legacy_path)
+        with sqlite3.connect(legacy_path) as connection:
+            connection.execute(
+                """
+                CREATE TRIGGER block_task_updates
+                BEFORE UPDATE ON tasks
+                BEGIN
+                    SELECT RAISE(ABORT, 'Migration blocked for test');
+                END
+                """
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+            initialize_storage(legacy_path, date(2026, 7, 21))
+
+        with sqlite3.connect(legacy_path) as connection:
+            columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(tasks)"
+                ).fetchall()
+            }
+            saved_task = connection.execute(
+                "SELECT title, status FROM tasks WHERE task_id = 1"
+            ).fetchone()
+
+        self.assertEqual(columns, {
+            "task_id",
+            "group_id",
+            "title",
+            "description",
+            "assignee_id",
+            "status",
+        })
+        self.assertEqual(saved_task, ("Wash dishes", "complete"))
 
     def test_assigned_task_remains_after_reconnecting(self):
         alex_id = create_user(self.database_path, "Alex")
@@ -502,6 +745,8 @@ class TestUserStorage(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             jordan_id,
+            "2026-07-25",
+            "low",
         )
 
         tasks = list_tasks_for_group(self.database_path, group_id)
@@ -517,6 +762,8 @@ class TestUserStorage(unittest.TestCase):
                     "assignee_id": jordan_id,
                     "assignee_username": "Jordan",
                     "status": "incomplete",
+                    "due_date": "2026-07-25",
+                    "priority": "low",
                 }
             ],
         )

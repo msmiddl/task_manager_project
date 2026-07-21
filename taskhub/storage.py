@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 from typing import Iterator, Literal, TypeAlias
 
@@ -25,7 +26,18 @@ REQUIRED_TABLE_COLUMNS = {
         "description",
         "assignee_id",
         "status",
+        "due_date",
+        "priority",
     },
+}
+
+LEGACY_TASK_COLUMNS = {
+    "task_id",
+    "group_id",
+    "title",
+    "description",
+    "assignee_id",
+    "status",
 }
 
 
@@ -50,7 +62,10 @@ def open_connection(
         connection.close()
 
 
-def _validate_existing_storage(connection: sqlite3.Connection) -> None:
+def _validate_existing_storage(
+    connection: sqlite3.Connection,
+    allow_legacy_tasks: bool = False,
+) -> None:
     """Confirm an existing file has the approved TaskHub schema."""
     check_result = connection.execute("PRAGMA quick_check").fetchone()
     if check_result is None or check_result[0] != "ok":
@@ -61,7 +76,15 @@ def _validate_existing_storage(connection: sqlite3.Connection) -> None:
             f"PRAGMA table_info({table_name})"
         ).fetchall()
         saved_columns = {row["name"] for row in rows}
-        if saved_columns != required_columns:
+        if table_name == "tasks" and allow_legacy_tasks:
+            valid_columns = (
+                LEGACY_TASK_COLUMNS.issubset(saved_columns)
+                and saved_columns.issubset(required_columns)
+            )
+        else:
+            valid_columns = saved_columns == required_columns
+
+        if not valid_columns:
             raise sqlite3.DatabaseError(
                 "The database does not have the TaskHub schema."
             )
@@ -72,14 +95,71 @@ def _validate_existing_storage(connection: sqlite3.Connection) -> None:
         )
 
 
-def initialize_storage(database_path: DatabasePath) -> None:
+def _migrate_task_scheduling_fields(
+    connection: sqlite3.Connection,
+    migration_date: date,
+) -> None:
+    """Add scheduling fields without replacing existing task records."""
+    rows = connection.execute("PRAGMA table_info(tasks)").fetchall()
+    task_columns = {row["name"] for row in rows}
+
+    if "due_date" not in task_columns:
+        connection.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+    connection.execute(
+        "UPDATE tasks SET due_date = ? WHERE due_date IS NULL",
+        (migration_date.isoformat(),),
+    )
+
+    if "priority" not in task_columns:
+        connection.execute(
+            """
+            ALTER TABLE tasks
+            ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'
+                CHECK (priority IN ('low', 'medium', 'high'))
+            """
+        )
+    connection.execute(
+        "UPDATE tasks SET priority = 'medium' WHERE priority IS NULL"
+    )
+
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS tasks_require_due_date_on_insert
+        BEFORE INSERT ON tasks
+        WHEN NEW.due_date IS NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'A task due date is required.');
+        END
+        """
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS tasks_require_due_date_on_update
+        BEFORE UPDATE OF due_date ON tasks
+        WHEN NEW.due_date IS NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'A task due date is required.');
+        END
+        """
+    )
+
+
+def initialize_storage(
+    database_path: DatabasePath,
+    migration_date: date | None = None,
+) -> None:
     """Create missing storage or validate an existing TaskHub database."""
     database_already_exists = Path(database_path).exists()
+    fallback_due_date = migration_date or date.today()
 
     try:
         with open_connection(database_path) as connection:
             if database_already_exists:
-                _validate_existing_storage(connection)
+                connection.execute("BEGIN")
+                _validate_existing_storage(
+                    connection,
+                    allow_legacy_tasks=True,
+                )
 
             connection.execute(
                 """
@@ -120,11 +200,19 @@ def initialize_storage(database_path: DatabasePath) -> None:
                     assignee_id INTEGER NOT NULL,
                     status TEXT NOT NULL DEFAULT 'incomplete'
                         CHECK (status IN ('incomplete', 'complete')),
+                    due_date TEXT NOT NULL,
+                    priority TEXT NOT NULL DEFAULT 'medium'
+                        CHECK (priority IN ('low', 'medium', 'high')),
                     FOREIGN KEY (group_id, assignee_id)
                         REFERENCES memberships (group_id, user_id)
                 )
                 """
             )
+            _migrate_task_scheduling_fields(
+                connection,
+                fallback_due_date,
+            )
+            _validate_existing_storage(connection)
             connection.commit()
     except sqlite3.Error as error:
         raise RuntimeError("Saved profile data is unavailable.") from error
@@ -380,8 +468,12 @@ def create_assigned_task(
     title: str,
     description: str,
     assignee_id: int,
+    due_date: str | None = None,
+    priority: str = "medium",
 ) -> int:
-    """Save one assigned task with an incomplete status."""
+    """Save one assigned task with scheduling data and incomplete status."""
+    saved_due_date = due_date or date.today().isoformat()
+
     with open_connection(database_path) as connection:
         try:
             group_exists = connection.execute(
@@ -418,11 +510,20 @@ def create_assigned_task(
                     title,
                     description,
                     assignee_id,
-                    status
+                    status,
+                    due_date,
+                    priority
                 )
-                VALUES (?, ?, ?, ?, 'incomplete')
+                VALUES (?, ?, ?, ?, 'incomplete', ?, ?)
                 """,
-                (group_id, title, description, assignee_id),
+                (
+                    group_id,
+                    title,
+                    description,
+                    assignee_id,
+                    saved_due_date,
+                    priority,
+                ),
             )
             connection.commit()
             return int(cursor.lastrowid)
@@ -446,7 +547,9 @@ def get_task_by_id(
                     title,
                     description,
                     assignee_id,
-                    status
+                    status,
+                    due_date,
+                    priority
                 FROM tasks
                 WHERE task_id = ?
                 """,
@@ -465,6 +568,8 @@ def get_task_by_id(
         "description": row["description"],
         "assignee_id": row["assignee_id"],
         "status": row["status"],
+        "due_date": row["due_date"],
+        "priority": row["priority"],
     }
 
 
@@ -484,7 +589,9 @@ def list_tasks_for_group(
                     tasks.description,
                     tasks.assignee_id,
                     users.username AS assignee_username,
-                    tasks.status
+                    tasks.status,
+                    tasks.due_date,
+                    tasks.priority
                 FROM tasks
                 JOIN users ON users.user_id = tasks.assignee_id
                 WHERE tasks.group_id = ?
@@ -504,6 +611,8 @@ def list_tasks_for_group(
             "assignee_id": row["assignee_id"],
             "assignee_username": row["assignee_username"],
             "status": row["status"],
+            "due_date": row["due_date"],
+            "priority": row["priority"],
         }
         for row in rows
     ]

@@ -209,6 +209,8 @@ The `group_id` and `user_id` pair must be unique.
 | `description` | `str` | Yes | 1–100 characters and not entirely whitespace. |
 | `assignee_id` | `int` | Yes | References a user who belongs to the task’s group. |
 | `status` | `str` | Yes | Created as `incomplete`; may change once to `complete`; no other value is valid. |
+| `due_date` | `str` | Yes | A real calendar date stored as ISO `YYYY-MM-DD` text. |
+| `priority` | `str` | Yes | Exactly `low`, `medium`, or `high`. |
 
 ### 5.5 Active session
 
@@ -257,12 +259,29 @@ Storage must support these rules in addition to the checks in `core.py`:
 - Unique user-group membership pairs.
 - Valid references from groups, memberships, and tasks to related records.
 - Task statuses limited to `incomplete` and `complete`.
+- Task priorities limited to `low`, `medium`, and `high`.
+- Task due dates stored as ISO `YYYY-MM-DD` text.
 
 SQLite relationship enforcement must be enabled whenever a connection is opened. This prevents a membership or task from pointing to a user or group that does not exist.
 
 Creating a group and adding its creator membership must occur in one **transaction**, meaning both changes succeed or neither remains saved.
 
 The current user and selected group remain in Streamlit session state and are not saved permanently.
+
+### 6.3 Approved calendar-enhancement design
+
+The calendar enhancement uses only Python's standard `datetime` and `calendar` modules with the existing Streamlit and SQLite dependencies.
+
+- `app.py` owns the date picker, priority selector, task-list/calendar view selector, calendar grid, and previous/next-month session state.
+- `taskhub/core.py` validates real ISO calendar dates and the three lowercase priority values. It calculates overdue and due-today labels using a supplied local date so tests remain deterministic, and filters selected-group tasks for a displayed year and month.
+- `taskhub/storage.py` owns the two new task columns, schema migration, constraints, inserts, and retrieval. It does not calculate display labels.
+- Existing group-access, assignment, and assignee-only completion rules are reused without modification.
+
+The `tasks` table gains required `due_date` and `priority` values. New tasks must provide both. Priority is constrained to `low`, `medium`, or `high`; real-date validation remains centralized in core logic.
+
+Existing databases are upgraded in a transaction without deleting or recreating tables. Every pre-enhancement task receives the local migration date in ISO format as its fallback due date and `medium` priority. Initialization detects whether each column already exists, applies only missing changes, validates the upgraded schema, and never overwrites scheduling values on repeated initialization. A failed migration produces the existing controlled saved-data-unavailable error.
+
+Calendar month selection is temporary Streamlit session state. It begins at the current local month after application restart and resets when the current user or selected group changes. Navigation does not write to SQLite.
 
 ## 7. Error-handling strategy
 

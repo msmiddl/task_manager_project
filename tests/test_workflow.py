@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from taskhub.core import (
@@ -121,6 +122,8 @@ class TestCompleteWorkflow(unittest.TestCase):
                 "description": "Wash and dry the dishes",
                 "assignee_id": jordan["user_id"],
                 "status": "complete",
+                "due_date": date.today().isoformat(),
+                "priority": "medium",
             },
         )
 
