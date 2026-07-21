@@ -6,6 +6,7 @@ from typing import Iterator, TypeAlias
 
 DatabasePath: TypeAlias = str | Path
 UserRecord: TypeAlias = dict[str, int | str]
+GroupRecord: TypeAlias = dict[str, int | str]
 
 
 @contextmanager
@@ -38,6 +39,27 @@ def initialize_storage(database_path: DatabasePath) -> None:
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
                     username TEXT NOT NULL UNIQUE
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS groups (
+                    group_id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    creator_id INTEGER NOT NULL,
+                    FOREIGN KEY (creator_id) REFERENCES users (user_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memberships (
+                    group_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    PRIMARY KEY (group_id, user_id),
+                    FOREIGN KEY (group_id) REFERENCES groups (group_id),
+                    FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
                 """
             )
@@ -126,5 +148,74 @@ def list_users(database_path: DatabasePath) -> list[UserRecord]:
 
     return [
         {"user_id": row["user_id"], "username": row["username"]}
+        for row in rows
+    ]
+
+
+def create_group(
+    database_path: DatabasePath,
+    name: str,
+    creator_id: int,
+) -> int:
+    """Save a group and its creator membership in one transaction."""
+    if get_user_by_id(database_path, creator_id) is None:
+        raise LookupError("The group creator could not be found.")
+
+    with open_connection(database_path) as connection:
+        try:
+            cursor = connection.execute(
+                """
+                INSERT INTO groups (name, creator_id)
+                VALUES (?, ?)
+                """,
+                (name, creator_id),
+            )
+            group_id = int(cursor.lastrowid)
+            connection.execute(
+                """
+                INSERT INTO memberships (group_id, user_id)
+                VALUES (?, ?)
+                """,
+                (group_id, creator_id),
+            )
+            connection.commit()
+            return group_id
+        except sqlite3.IntegrityError as error:
+            connection.rollback()
+            raise ValueError(
+                "That exact group name already exists."
+            ) from error
+        except sqlite3.Error as error:
+            connection.rollback()
+            raise RuntimeError("The group could not be saved.") from error
+
+
+def list_groups_for_user(
+    database_path: DatabasePath,
+    user_id: int,
+) -> list[GroupRecord]:
+    """Return the groups containing one user profile."""
+    try:
+        with open_connection(database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT groups.group_id, groups.name, groups.creator_id
+                FROM groups
+                JOIN memberships
+                    ON memberships.group_id = groups.group_id
+                WHERE memberships.user_id = ?
+                ORDER BY groups.group_id
+                """,
+                (user_id,),
+            ).fetchall()
+    except sqlite3.Error as error:
+        raise RuntimeError("Saved groups could not be loaded.") from error
+
+    return [
+        {
+            "group_id": row["group_id"],
+            "name": row["name"],
+            "creator_id": row["creator_id"],
+        }
         for row in rows
     ]
