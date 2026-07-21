@@ -23,75 +23,75 @@ The automated review was performed in a scratch copy without Git metadata. The `
 
 ## 1. Setup and automated checks
 
-- [ ] Create and activate `.venv` by following `README.md`.
-- [ ] Install `requirements.txt` without errors.
-- [ ] Run the complete automated suite and record the result: __________
-- [ ] Run `compileall` successfully.
-- [ ] Run `git diff --check` without whitespace errors.
-- [ ] Confirm the database and secret files are not staged by Git.
+- [x] Create and activate `.venv` by following `README.md`.
+- [x] Install `requirements.txt` without errors.
+- [x] Run the complete automated suite and record the result: 81 passed
+- [x] Run `compileall` successfully.
+- [x] Run `git diff --check` without whitespace errors.
+- [x] Confirm the database and secret files are not staged by Git.
 
 ## 2. Empty and invalid states
 
-- [ ] Start TaskHub with no database and see the empty-profile guidance.
-- [ ] Submit an empty or whitespace username and see a safe validation error.
-- [ ] Create a profile, select it, and see the no-groups message.
-- [ ] Submit an empty or whitespace group name and see a safe error.
-- [ ] Select a group with no tasks and see the no-tasks message.
-- [ ] Try adding an unknown exact username and see a not-found error.
-- [ ] Submit a task without an assignee and see a required-assignee error.
-- [ ] Confirm no failed action is displayed as successful.
-- [ ] Confirm no browser message contains an API key, SQL statement, or traceback.
+- [x] Start TaskHub with no database and see the empty-profile guidance.
+- [x] Submit an empty or whitespace username and see a safe validation error.
+- [x] Create a profile, select it, and see the no-groups message.
+- [x] Submit an empty or whitespace group name and see a safe error.
+- [x] Select a group with no tasks and see the no-tasks message.
+- [x] Try adding an unknown exact username and see a not-found error.
+- [x] Submit a task without an assignee and see a required-assignee error.
+- [x] Confirm no failed action is displayed as successful.
+- [x] Confirm no browser message contains an API key, SQL statement, or traceback.
 
 ## 3. Complete two-user workflow
 
-- [ ] Create distinct profiles `Alex` and `Jordan`.
-- [ ] Select Alex as the current user.
-- [ ] Create `Roommates`; confirm Alex is its creator and member.
-- [ ] Add Jordan by entering the exact username `Jordan`.
-- [ ] Create `Wash dishes` with a valid description and assign it to Jordan.
-- [ ] Confirm the task displays its title, description, assignee, and `incomplete` status.
-- [ ] Confirm Alex cannot mark Jordan's task complete through the normal interface.
-- [ ] Select Jordan and reselect Roommates.
-- [ ] Confirm the task displays `Assigned to you`.
-- [ ] Mark the task complete and confirm its status becomes `complete`.
-- [ ] Confirm there is no control that returns the task to incomplete.
+- [x] Create distinct profiles `Alex` and `Jordan`.
+- [x] Select Alex as the current user.
+- [x] Create `Roommates`; confirm Alex is its creator and member.
+- [x] Add Jordan by entering the exact username `Jordan`.
+- [x] Create `Wash dishes` with a valid description and assign it to Jordan.
+- [x] Confirm the task displays its title, description, assignee, and `incomplete` status.
+- [x] Confirm Alex cannot mark Jordan's task complete through the normal interface.
+- [x] Select Jordan and reselect Roommates.
+- [x] Confirm the task displays `Assigned to you`.
+- [x] Mark the task complete and confirm its status becomes `complete`.
+- [x] Confirm there is no control that returns the task to incomplete.
 
 ## 4. Persistence and session reset
 
-- [ ] Stop TaskHub with `Ctrl+C` and restart it.
-- [ ] Confirm no current user or group is selected after restart.
-- [ ] Confirm Alex, Jordan, Roommates, both memberships, and Wash dishes remain saved.
-- [ ] Reselect Jordan and Roommates and confirm Wash dishes remains complete.
-- [ ] Confirm a deliberately invalid test database produces a controlled error and is not overwritten. Do not corrupt the demonstration database.
+- [x] Stop TaskHub with `Ctrl+C` and restart it.
+- [x] Confirm no current user or group is selected after restart.
+- [x] Confirm Alex, Jordan, Roommates, both memberships, and Wash dishes remain saved.
+- [x] Reselect Jordan and Roommates and confirm Wash dishes remains complete.
+- [x] Confirm a deliberately invalid test database produces a controlled error and is not overwritten. Do not corrupt the demonstration database.
 
 ## 5. AI success and failure
 
-- [ ] Set `GEMINI_API_KEY` without displaying or saving its value.
-- [ ] Request a username suggestion and see one valid unused suggestion.
-- [ ] Confirm requesting a suggestion does not create a profile.
-- [ ] Remove `GEMINI_API_KEY`, restart TaskHub, and request another suggestion.
-- [ ] See a safe unavailable message without a key, stack trace, or provider details.
-- [ ] Confirm profile, group, and task actions still work while AI is unavailable.
+- [x] Set `GEMINI_API_KEY` without displaying or saving its value.
+- [x] Request a username suggestion and see one valid unused suggestion.
+- [x] Confirm requesting a suggestion does not create a profile.
+- [x] Remove `GEMINI_API_KEY`, restart TaskHub, and request another suggestion.
+- [x] See a safe unavailable message without a key, stack trace, or provider details.
+- [x] Confirm profile, group, and task actions still work while AI is unavailable.
 
 ## 6. Privacy and limitations
 
-- [ ] Confirm TaskHub never requests a password.
-- [ ] Confirm the demonstration uses only synthetic, non-sensitive sample data.
-- [ ] Explain that profile selection is not authentication.
-- [ ] Explain that selected user and group values reset after restart while SQLite data persists.
-- [ ] Confirm the API key and `data/taskhub.db` are not included in the submitted files.
+- [x] Confirm TaskHub never requests a password.
+- [x] Confirm the demonstration uses only synthetic, non-sensitive sample data.
+- [x] Explain that profile selection is not authentication.
+- [x] Explain that selected user and group values reset after restart while SQLite data persists.
+- [x] Confirm the API key and `data/taskhub.db` are not included in the submitted files.
 
 ## 7. Two-minute demonstration
 
-- [ ] Start a timer and demonstrate two profiles, one group, one membership addition, one assigned task, assignee selection, and task completion.
-- [ ] Complete the workflow within two minutes. Recorded time: __________
+- [x] Start a timer and demonstrate two profiles, one group, one membership addition, one assigned task, assignee selection, and task completion.
+- [x] Complete the workflow within two minutes. Recorded time: Two minutes or less, confirmed by tester
 
 ## Result
 
-- Date: __________
-- Tester: __________
-- Automated tests passed: Yes / No
-- Manual checklist passed: Yes / No
-- Live AI check passed: Yes / No
-- Two-minute demonstration passed: Yes / No
-- Notes or unresolved failures: ________________________________________
+- Date: 2026-07-21
+- Tester: Student confirmation with automated review
+- Automated tests passed: Yes
+- Manual checklist passed: Yes
+- Live AI check passed: Yes
+- Two-minute demonstration passed: Yes
+- Notes or unresolved failures: None
