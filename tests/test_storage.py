@@ -7,6 +7,7 @@ from taskhub.storage import (
     add_group_member,
     create_group,
     create_assigned_task,
+    complete_task,
     create_user,
     get_user_by_id,
     get_task_by_id,
@@ -400,6 +401,56 @@ class TestUserStorage(unittest.TestCase):
 
     def test_missing_task_identifier_returns_none(self):
         self.assertIsNone(get_task_by_id(self.database_path, 999))
+
+    def test_complete_task_persists_after_reconnecting(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Buy soap",
+            "Buy dish soap",
+            alex_id,
+        )
+
+        result = complete_task(self.database_path, task_id)
+        saved_task = get_task_by_id(self.database_path, task_id)
+
+        self.assertEqual(result, "completed")
+        self.assertEqual(saved_task["status"], "complete")
+
+    def test_repeated_completion_reports_already_complete(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Buy soap",
+            "Buy dish soap",
+            alex_id,
+        )
+        complete_task(self.database_path, task_id)
+
+        second_result = complete_task(self.database_path, task_id)
+
+        self.assertEqual(second_result, "already_complete")
+        self.assertEqual(
+            get_task_by_id(self.database_path, task_id)["status"],
+            "complete",
+        )
+
+    def test_completion_reports_missing_task(self):
+        result = complete_task(self.database_path, 999)
+
+        self.assertEqual(result, "not_found")
 
     def test_list_group_tasks_includes_assignee_username(self):
         alex_id = create_user(self.database_path, "Alex")

@@ -1,13 +1,18 @@
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, TypeAlias
+from typing import Iterator, Literal, TypeAlias
 
 
 DatabasePath: TypeAlias = str | Path
 UserRecord: TypeAlias = dict[str, int | str]
 GroupRecord: TypeAlias = dict[str, int | str]
 TaskRecord: TypeAlias = dict[str, int | str]
+CompletionResult: TypeAlias = Literal[
+    "completed",
+    "already_complete",
+    "not_found",
+]
 
 
 @contextmanager
@@ -461,3 +466,38 @@ def list_tasks_for_group(
         }
         for row in rows
     ]
+
+
+def complete_task(
+    database_path: DatabasePath,
+    task_id: int,
+) -> CompletionResult:
+    """Persist a one-way task completion and describe the outcome."""
+    with open_connection(database_path) as connection:
+        try:
+            row = connection.execute(
+                "SELECT status FROM tasks WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+
+            if row is None:
+                return "not_found"
+
+            if row["status"] == "complete":
+                return "already_complete"
+
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = 'complete'
+                WHERE task_id = ? AND status = 'incomplete'
+                """,
+                (task_id,),
+            )
+            connection.commit()
+            return "completed"
+        except sqlite3.Error as error:
+            connection.rollback()
+            raise RuntimeError(
+                "The task completion could not be saved."
+            ) from error
