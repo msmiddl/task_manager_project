@@ -2,7 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskhub.core import create_profile, validate_username
+from taskhub.core import (
+    create_group,
+    create_profile,
+    list_user_groups,
+    validate_group_name,
+    validate_username,
+)
 from taskhub.storage import initialize_storage, list_users
 
 
@@ -62,6 +68,137 @@ class TestProfileCore(unittest.TestCase):
         self.assertEqual(first_profile["username"], "Alex")
         self.assertEqual(second_profile["username"], "alex")
         self.assertEqual(spaced_profile["username"], " Alex ")
+
+
+class TestGroupCore(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.database_path = (
+            Path(self.temporary_directory.name) / "test_taskhub.db"
+        )
+        initialize_storage(self.database_path)
+        self.alex = create_profile(self.database_path, "Alex")
+
+    def tearDown(self):
+        self.temporary_directory.cleanup()
+
+    def test_group_name_length_boundaries_are_valid(self):
+        validate_group_name("AB")
+        validate_group_name("A" * 25)
+
+    def test_group_name_outside_boundaries_is_rejected(self):
+        for name in ("A", "A" * 26):
+            with self.subTest(name_length=len(name)):
+                with self.assertRaisesRegex(ValueError, "2 to 25"):
+                    validate_group_name(name)
+
+    def test_empty_and_whitespace_group_names_are_rejected(self):
+        for name in ("", "   "):
+            with self.subTest(name=repr(name)):
+                with self.assertRaisesRegex(ValueError, "required"):
+                    create_group(
+                        self.database_path,
+                        name,
+                        self.alex["user_id"],
+                    )
+
+        self.assertEqual(
+            list_user_groups(
+                self.database_path,
+                self.alex["user_id"],
+            ),
+            [],
+        )
+
+    def test_create_group_makes_current_user_creator_and_member(self):
+        group = create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+
+        self.assertEqual(group["name"], "Roommates")
+        self.assertEqual(group["creator_id"], self.alex["user_id"])
+        self.assertEqual(
+            list_user_groups(
+                self.database_path,
+                self.alex["user_id"],
+            ),
+            [group],
+        )
+
+    def test_exact_duplicate_group_name_is_rejected(self):
+        create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            create_group(
+                self.database_path,
+                "Roommates",
+                self.alex["user_id"],
+            )
+
+        self.assertEqual(
+            len(
+                list_user_groups(
+                    self.database_path,
+                    self.alex["user_id"],
+                )
+            ),
+            1,
+        )
+
+    def test_capitalization_and_spaces_are_preserved(self):
+        first_group = create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+        second_group = create_group(
+            self.database_path,
+            "roommates",
+            self.alex["user_id"],
+        )
+        spaced_group = create_group(
+            self.database_path,
+            " Roommates ",
+            self.alex["user_id"],
+        )
+
+        self.assertEqual(first_group["name"], "Roommates")
+        self.assertEqual(second_group["name"], "roommates")
+        self.assertEqual(spaced_group["name"], " Roommates ")
+
+    def test_group_lists_include_only_selected_users_groups(self):
+        jordan = create_profile(self.database_path, "Jordan")
+        alex_group = create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+        jordan_group = create_group(
+            self.database_path,
+            "Class Project",
+            jordan["user_id"],
+        )
+
+        self.assertEqual(
+            list_user_groups(
+                self.database_path,
+                self.alex["user_id"],
+            ),
+            [alex_group],
+        )
+        self.assertEqual(
+            list_user_groups(
+                self.database_path,
+                jordan["user_id"],
+            ),
+            [jordan_group],
+        )
 
 
 if __name__ == "__main__":
