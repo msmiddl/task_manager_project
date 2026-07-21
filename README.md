@@ -1,92 +1,29 @@
 # TaskHub
 
-## Project summary
+TaskHub is a beginner Python capstone for organizing assigned tasks in small groups. It runs locally in a Streamlit browser interface and stores profiles, groups, memberships, tasks, assignees, and completion statuses in SQLite.
 
-TaskHub is a beginner Python capstone project for organizing assigned tasks within small groups. The planned application will let people create local user profiles, form groups, assign tasks to group members, and track whether tasks are incomplete or complete.
+## Features
 
-TaskHub is designed to run locally. It is not intended to be a production or cloud-hosted application.
+- Create and select local user profiles.
+- Create groups and add existing profiles by exact username.
+- Create tasks with one required group-member assignee.
+- Display task titles, descriptions, assignees, and statuses.
+- Label tasks assigned to the selected current profile.
+- Allow only the selected assignee profile to mark a task complete.
+- Keep application data after TaskHub closes.
+- Request an optional AI-generated username suggestion.
 
-## Problem solved
+## Requirements
 
-Small groups often coordinate responsibilities through verbal reminders, shared notes, or no organized system. This can make it difficult to know:
+- Python 3.11 or newer
+- Internet access for installing packages
+- Internet access and a Google Gemini API key only for live AI suggestions
 
-- Which tasks still need to be completed
-- Who is responsible for each task
-- Whether assigned work has been completed
+The core profile, group, and task features remain usable without AI access.
 
-TaskHub is intended to keep this information in one local application.
+## Installation on Windows PowerShell
 
-## Main features
-
-The approved MVP plans to include:
-
-- Create local user profiles with unique usernames
-- Select a profile as the current user for the active session
-- Create groups and display the current user’s groups
-- Add an existing profile to a group by exact username
-- Create an incomplete task with a required assignee
-- Display each task’s title, description, assignee, and status
-- Label tasks assigned to the current user
-- Allow only the selected assignee profile to mark a task complete
-- Keep profiles, groups, memberships, and tasks after the application closes
-- Request an AI-generated username suggestion as an optional user action
-
-These are planned features. Implementing the AI suggestion is required for the MVP, although a person may choose not to request a suggestion while using TaskHub. Feature implementation status must be verified against the code and tests before any feature is described as working.
-
-## Current status
-
-**TaskHub is under development.**
-
-The project specification, technical design, implementation task plan, and project guide have been created. Application code and automated tests have not yet been completed in this workspace.
-
-Development should follow the ordered tasks in [docs/tasks.md](docs/tasks.md), beginning with T01.
-
-## Planned technology
-
-| Technology | Planned purpose |
-| --- | --- |
-| Python | Application language |
-| Streamlit | Local browser-based interface |
-| SQLite through `sqlite3` | Local persistent storage |
-| `unittest` | Automated testing |
-| Google Gen AI Python SDK | AI username suggestion |
-
-Pandas is not required for the approved project.
-
-## Project structure
-
-The planned structure is:
-
-```text
-task_manager_project/
-├── app.py
-├── taskhub/
-│   ├── __init__.py
-│   ├── ai_service.py
-│   ├── core.py
-│   └── storage.py
-├── tests/
-│   ├── __init__.py
-│   ├── test_ai_service.py
-│   ├── test_core.py
-│   ├── test_storage.py
-│   └── test_workflow.py
-├── data/
-├── docs/
-│   ├── design.md
-│   ├── specification.md
-│   └── tasks.md
-├── PROJECT_GUIDE.md
-├── .gitignore
-├── README.md
-└── requirements.txt
-```
-
-Some planned files and folders may not exist until their implementation task is completed.
-
-## Installation
-
-The following commands are intended for Windows PowerShell after the project skeleton and `requirements.txt` have been created:
+Open PowerShell in the folder containing `app.py`, then run:
 
 ```powershell
 py -m venv .venv
@@ -95,86 +32,95 @@ py -m pip install --upgrade pip
 py -m pip install -r requirements.txt
 ```
 
-The AI feature will require a Google API key in the local environment. Do not place the key in source code, SQLite data, screenshots, or committed files.
+The activated terminal begins with `(.venv)`. Run the activation command again whenever a new PowerShell window is opened for this project.
 
-## How to run
+## Google API key
 
-After `app.py` has been implemented, run:
+The AI suggestion button requires a Google Gemini API key. Set it only in the PowerShell session that will start TaskHub:
+
+```powershell
+$env:GEMINI_API_KEY="your-real-api-key"
+```
+
+Never put the real key in source code, SQLite data, Git commits, screenshots, demonstrations, or submitted project files. Do not share terminal output containing the key.
+
+Remove it from the current terminal with:
+
+```powershell
+Remove-Item Env:GEMINI_API_KEY
+```
+
+## Run TaskHub
+
+From the project root with the virtual environment activated:
 
 ```powershell
 py -m streamlit run app.py
 ```
 
-This command is not expected to work until the project skeleton and Streamlit application are created.
+Use the local URL shown in the terminal. Keep that terminal open while using TaskHub. Press `Ctrl+C` in the terminal to stop the application.
 
-## How to run tests
+## Run tests and project checks
 
-After the test files have been implemented, run the complete suite with:
+Run the complete automated test suite:
 
 ```powershell
 py -m unittest discover -s tests -v
 ```
 
-Run one test module while developing a specific behavior:
+Run the workflow integration test by itself:
 
 ```powershell
-py -m unittest tests.test_core -v
+py -m unittest tests.test_workflow -v
 ```
 
-Do not report tests as passing unless the command was actually executed successfully.
+Run the approved dependency-free project checks:
 
-## Example usage
+```powershell
+py -m compileall app.py taskhub tests
+git diff --check
+```
 
-The following is a placeholder example of the planned workflow. It is not proof that the application is implemented:
+No external formatter or linter is configured.
+
+## Saved data and sessions
+
+TaskHub stores local application data in `data/taskhub.db`. Valid saved profiles, groups, memberships, assignments, and completion statuses remain after the application closes and reopens.
+
+The selected current user and selected group exist only in Streamlit session state. They intentionally reset when TaskHub restarts and must be selected again.
+
+A missing database is treated as a new empty application. An existing unreadable or invalid database produces a controlled error and is not repaired or overwritten automatically. Back up important data before changing files in `data/`.
+
+## Example workflow
 
 1. Create profiles named `Alex` and `Jordan`.
-2. Select `Alex` as the current user.
+2. Select Alex as the current user.
 3. Create a group named `Roommates`.
-4. Add `Jordan` to the group by entering the exact username.
-5. Create a task named `Wash dishes` and assign it to Jordan.
-6. Select Jordan as the current user.
-7. View the task with an `Assigned to you` label.
-8. Mark the task complete.
-9. Restart TaskHub and confirm the completed task remains saved.
+4. Add Jordan using the exact username `Jordan`.
+5. Create `Wash dishes`, enter a description, and assign it to Jordan.
+6. Confirm Alex cannot mark Jordan's task complete.
+7. Select Jordan and then select Roommates again.
+8. Confirm the task displays `Assigned to you`.
+9. Mark it complete.
+10. Restart TaskHub, reselect Jordan and Roommates, and confirm it remains complete.
 
-The current-user and selected-group choices are expected to reset after restart even though saved application data remains.
+## Privacy and security limitations
 
-## Requirements and design documents
+TaskHub has no authentication. Selecting a profile does not prove the operator is that person, and any local operator can select any saved profile. Permission rules apply to the selected profile only.
 
-- [Project specification](docs/specification.md) — approved behavior and acceptance criteria
-- [Technical design](docs/design.md) — approved modules, storage, interface, and testing design
-- [Implementation tasks](docs/tasks.md) — ordered development sessions and requirement traceability
-- [Project guide](PROJECT_GUIDE.md) — coding workflow and AI-assistant rules
+Do not enter personal, private, or sensitive information in usernames, group names, task titles, or task descriptions. TaskHub does not detect sensitive information and is not suitable for untrusted users or confidential data. It does not collect or transmit passwords.
+
+The application runs locally and does not synchronize between devices. Tasks cannot be edited, deleted, reassigned, or returned to incomplete.
+
+## Manual verification
+
+Use [docs/manual-test-checklist.md](docs/manual-test-checklist.md) for final interface, persistence, privacy, AI, and demonstration checks.
+
+## Project documents
+
+- [Project specification](docs/specification.md)
+- [Technical design](docs/design.md)
+- [Implementation tasks](docs/tasks.md)
+- [Project guide](PROJECT_GUIDE.md)
 
 The specification is the source of truth for application behavior.
-
-## Limitations
-
-The approved MVP has these intentional limitations:
-
-- It runs locally and is not deployed to the cloud.
-- It does not authenticate users or store passwords.
-- A person can select any existing local profile.
-- It does not synchronize between devices or users in real time.
-- Tasks cannot be edited, deleted, reassigned, or returned to incomplete.
-- Every task must have an assignee when it is created.
-- It does not include notifications, due dates, priorities, recurring tasks, or calendar integration.
-- The AI feature depends on an API key, internet access, and an external service.
-- The application is not suitable for private or sensitive information.
-
-## Future improvements
-
-Future work may be considered only after the approved MVP is implemented and tested. Possible later improvements include:
-
-- Password authentication
-- Formal group invitations
-- Task editing, deletion, and reassignment
-- Due dates and priorities
-- Recurring tasks
-- Notifications
-- Calendar integration
-- Member preferences and workload tracking
-- AI-assisted task assignment
-- Real-time synchronization or cloud deployment
-
-Future improvements are not part of the current implementation plan.
