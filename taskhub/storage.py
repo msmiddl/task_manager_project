@@ -7,6 +7,7 @@ from typing import Iterator, TypeAlias
 DatabasePath: TypeAlias = str | Path
 UserRecord: TypeAlias = dict[str, int | str]
 GroupRecord: TypeAlias = dict[str, int | str]
+TaskRecord: TypeAlias = dict[str, int | str]
 
 
 @contextmanager
@@ -60,6 +61,21 @@ def initialize_storage(database_path: DatabasePath) -> None:
                     PRIMARY KEY (group_id, user_id),
                     FOREIGN KEY (group_id) REFERENCES groups (group_id),
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tasks (
+                    task_id INTEGER PRIMARY KEY,
+                    group_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    assignee_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'incomplete'
+                        CHECK (status IN ('incomplete', 'complete')),
+                    FOREIGN KEY (group_id, assignee_id)
+                        REFERENCES memberships (group_id, user_id)
                 )
                 """
             )
@@ -310,3 +326,97 @@ def list_group_members(
         {"user_id": row["user_id"], "username": row["username"]}
         for row in rows
     ]
+
+
+def create_assigned_task(
+    database_path: DatabasePath,
+    group_id: int,
+    title: str,
+    description: str,
+    assignee_id: int,
+) -> int:
+    """Save one assigned task with an incomplete status."""
+    with open_connection(database_path) as connection:
+        try:
+            group_exists = connection.execute(
+                "SELECT 1 FROM groups WHERE group_id = ?",
+                (group_id,),
+            ).fetchone()
+            if group_exists is None:
+                raise LookupError("The task group could not be found.")
+
+            assignee_exists = connection.execute(
+                "SELECT 1 FROM users WHERE user_id = ?",
+                (assignee_id,),
+            ).fetchone()
+            if assignee_exists is None:
+                raise LookupError("The task assignee could not be found.")
+
+            membership_exists = connection.execute(
+                """
+                SELECT 1
+                FROM memberships
+                WHERE group_id = ? AND user_id = ?
+                """,
+                (group_id, assignee_id),
+            ).fetchone()
+            if membership_exists is None:
+                raise ValueError(
+                    "The task assignee must be a group member."
+                )
+
+            cursor = connection.execute(
+                """
+                INSERT INTO tasks (
+                    group_id,
+                    title,
+                    description,
+                    assignee_id,
+                    status
+                )
+                VALUES (?, ?, ?, ?, 'incomplete')
+                """,
+                (group_id, title, description, assignee_id),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+        except sqlite3.Error as error:
+            connection.rollback()
+            raise RuntimeError("The task could not be saved.") from error
+
+
+def get_task_by_id(
+    database_path: DatabasePath,
+    task_id: int,
+) -> TaskRecord | None:
+    """Return a task by identifier, or None when absent."""
+    try:
+        with open_connection(database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    task_id,
+                    group_id,
+                    title,
+                    description,
+                    assignee_id,
+                    status
+                FROM tasks
+                WHERE task_id = ?
+                """,
+                (task_id,),
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise RuntimeError("Saved tasks could not be loaded.") from error
+
+    if row is None:
+        return None
+
+    return {
+        "task_id": row["task_id"],
+        "group_id": row["group_id"],
+        "title": row["title"],
+        "description": row["description"],
+        "assignee_id": row["assignee_id"],
+        "status": row["status"],
+    }

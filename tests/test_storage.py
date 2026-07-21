@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -5,8 +6,10 @@ from pathlib import Path
 from taskhub.storage import (
     add_group_member,
     create_group,
+    create_assigned_task,
     create_user,
     get_user_by_id,
+    get_task_by_id,
     get_user_by_username,
     initialize_storage,
     is_group_member,
@@ -265,6 +268,137 @@ class TestUserStorage(unittest.TestCase):
         self.assertFalse(
             is_group_member(self.database_path, group_id, jordan_id)
         )
+
+    def test_create_and_retrieve_assigned_task(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        add_group_member(self.database_path, group_id, jordan_id)
+
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Wash dishes",
+            "Wash and dry the dishes",
+            jordan_id,
+        )
+
+        saved_task = get_task_by_id(self.database_path, task_id)
+        self.assertEqual(
+            saved_task,
+            {
+                "task_id": task_id,
+                "group_id": group_id,
+                "title": "Wash dishes",
+                "description": "Wash and dry the dishes",
+                "assignee_id": jordan_id,
+                "status": "incomplete",
+            },
+        )
+
+    def test_assigned_task_remains_after_reconnecting(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Buy soap",
+            "Buy dish soap",
+            alex_id,
+        )
+
+        saved_task = get_task_by_id(self.database_path, task_id)
+
+        self.assertIsNotNone(saved_task)
+        self.assertEqual(saved_task["status"], "incomplete")
+
+    def test_task_rejects_missing_group_reference(self):
+        alex_id = create_user(self.database_path, "Alex")
+
+        with self.assertRaisesRegex(LookupError, "group"):
+            create_assigned_task(
+                self.database_path,
+                999,
+                "Buy soap",
+                "Buy dish soap",
+                alex_id,
+            )
+
+    def test_task_rejects_missing_assignee_reference(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        with self.assertRaisesRegex(LookupError, "assignee"):
+            create_assigned_task(
+                self.database_path,
+                group_id,
+                "Buy soap",
+                "Buy dish soap",
+                999,
+            )
+
+    def test_task_rejects_nonmember_assignee(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        with self.assertRaisesRegex(ValueError, "group member"):
+            create_assigned_task(
+                self.database_path,
+                group_id,
+                "Buy soap",
+                "Buy dish soap",
+                jordan_id,
+            )
+
+    def test_tasks_table_rejects_invalid_status(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            with open_connection(self.database_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO tasks (
+                        group_id,
+                        title,
+                        description,
+                        assignee_id,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        group_id,
+                        "Buy soap",
+                        "Buy dish soap",
+                        alex_id,
+                        "waiting",
+                    ),
+                )
+
+    def test_missing_task_identifier_returns_none(self):
+        self.assertIsNone(get_task_by_id(self.database_path, 999))
 
 
 if __name__ == "__main__":
