@@ -3,13 +3,19 @@ import unittest
 from pathlib import Path
 
 from taskhub.core import (
+    add_group_member_by_username,
     create_group,
     create_profile,
     list_user_groups,
     validate_group_name,
     validate_username,
 )
-from taskhub.storage import initialize_storage, list_users
+from taskhub.storage import (
+    add_group_member,
+    initialize_storage,
+    list_group_members,
+    list_users,
+)
 
 
 class TestProfileCore(unittest.TestCase):
@@ -199,6 +205,112 @@ class TestGroupCore(unittest.TestCase):
             ),
             [jordan_group],
         )
+
+
+class TestGroupMemberCore(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.database_path = (
+            Path(self.temporary_directory.name) / "test_taskhub.db"
+        )
+        initialize_storage(self.database_path)
+        self.alex = create_profile(self.database_path, "Alex")
+        self.jordan = create_profile(self.database_path, "Jordan")
+        self.taylor = create_profile(self.database_path, "Taylor")
+        self.group = create_group(
+            self.database_path,
+            "Roommates",
+            self.alex["user_id"],
+        )
+
+    def tearDown(self):
+        self.temporary_directory.cleanup()
+
+    def member_names(self):
+        members = list_group_members(
+            self.database_path,
+            self.group["group_id"],
+        )
+        return [member["username"] for member in members]
+
+    def test_creator_adds_existing_user_by_exact_username(self):
+        added_member = add_group_member_by_username(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Jordan",
+        )
+
+        self.assertEqual(added_member, self.jordan)
+        self.assertEqual(self.member_names(), ["Alex", "Jordan"])
+
+    def test_wrong_capitalization_is_rejected(self):
+        with self.assertRaisesRegex(LookupError, "not found"):
+            add_group_member_by_username(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "jordan",
+            )
+
+        self.assertEqual(self.member_names(), ["Alex"])
+
+    def test_missing_username_is_rejected(self):
+        with self.assertRaisesRegex(LookupError, "not found"):
+            add_group_member_by_username(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "Unknown",
+            )
+
+        self.assertEqual(self.member_names(), ["Alex"])
+
+    def test_duplicate_member_is_rejected(self):
+        add_group_member_by_username(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Jordan",
+        )
+
+        with self.assertRaisesRegex(ValueError, "already a member"):
+            add_group_member_by_username(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "Jordan",
+            )
+
+        self.assertEqual(self.member_names(), ["Alex", "Jordan"])
+
+    def test_creator_cannot_be_added_twice(self):
+        with self.assertRaisesRegex(ValueError, "already a member"):
+            add_group_member_by_username(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                "Alex",
+            )
+
+        self.assertEqual(self.member_names(), ["Alex"])
+
+    def test_noncreator_cannot_add_member(self):
+        add_group_member(
+            self.database_path,
+            self.group["group_id"],
+            self.jordan["user_id"],
+        )
+
+        with self.assertRaisesRegex(PermissionError, "creator"):
+            add_group_member_by_username(
+                self.database_path,
+                self.group["group_id"],
+                self.jordan["user_id"],
+                "Taylor",
+            )
+
+        self.assertEqual(self.member_names(), ["Alex", "Jordan"])
 
 
 if __name__ == "__main__":

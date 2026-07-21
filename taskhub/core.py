@@ -60,3 +60,48 @@ def list_user_groups(
 ) -> list[storage.GroupRecord]:
     """Return only groups containing the selected current user."""
     return storage.list_groups_for_user(database_path, current_user_id)
+
+
+def add_group_member_by_username(
+    database_path: DatabasePath,
+    group_id: int,
+    current_user_id: int,
+    username: str,
+) -> UserRecord:
+    """Let a group creator add one profile by exact username."""
+    accessible_groups = storage.list_groups_for_user(
+        database_path,
+        current_user_id,
+    )
+    selected_group = next(
+        (
+            group
+            for group in accessible_groups
+            if group["group_id"] == group_id
+        ),
+        None,
+    )
+
+    if (
+        selected_group is None
+        or selected_group["creator_id"] != current_user_id
+    ):
+        raise PermissionError("Only the group creator can add members.")
+
+    user = storage.get_user_by_username(database_path, username)
+    if user is None:
+        raise LookupError("That exact username was not found.")
+
+    if storage.is_group_member(
+        database_path,
+        group_id,
+        int(user["user_id"]),
+    ):
+        raise ValueError("That user is already a member of the group.")
+
+    storage.add_group_member(
+        database_path,
+        group_id,
+        int(user["user_id"]),
+    )
+    return user
