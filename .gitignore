@@ -1,0 +1,20 @@
+*.csv
+.env
+data/*.db
+my_secrets/
+# Local Python environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Local TaskHub data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Local secrets
+.env
+.env.*
+!.env.example
