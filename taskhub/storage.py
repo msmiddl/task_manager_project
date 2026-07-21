@@ -86,6 +86,30 @@ def get_user_by_username(
     return {"user_id": row["user_id"], "username": row["username"]}
 
 
+def get_user_by_id(
+    database_path: DatabasePath,
+    user_id: int,
+) -> UserRecord | None:
+    """Return the profile with an identifier, or None when absent."""
+    try:
+        with open_connection(database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT user_id, username
+                FROM users
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise RuntimeError("Saved profiles could not be loaded.") from error
+
+    if row is None:
+        return None
+
+    return {"user_id": row["user_id"], "username": row["username"]}
+
+
 def list_users(database_path: DatabasePath) -> list[UserRecord]:
     """Return all saved profiles in creation order."""
     try:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from taskhub.storage import (
     create_user,
+    get_user_by_id,
     get_user_by_username,
     initialize_storage,
     list_users,
@@ -64,6 +65,18 @@ class TestUserStorage(unittest.TestCase):
         self.assertIsNone(
             get_user_by_username(self.database_path, "Unknown")
         )
+
+    def test_retrieve_user_by_identifier(self):
+        user_id = create_user(self.database_path, "Alex")
+
+        saved_user = get_user_by_id(self.database_path, user_id)
+
+        self.assertIsNotNone(saved_user)
+        self.assertEqual(saved_user["user_id"], user_id)
+        self.assertEqual(saved_user["username"], "Alex")
+
+    def test_missing_user_identifier_returns_none(self):
+        self.assertIsNone(get_user_by_id(self.database_path, 999))
 
     def test_foreign_keys_are_enabled(self):
         with open_connection(self.database_path) as connection:
