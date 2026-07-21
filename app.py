@@ -74,12 +74,14 @@ try:
             if selected_user_id != current_user_id:
                 st.session_state.pop("selected_group_id", None)
                 st.session_state.pop("selected_group_selector", None)
+                st.session_state.pop("member_username", None)
             st.session_state["current_user_id"] = selected_user_id
             active_user_id = selected_user_id
             selected_profile = profile_by_id[selected_user_id]
             st.write(f"Current user: {selected_profile['username']}")
 
     st.subheader("Groups")
+    active_group = None
 
     if active_user_id is None:
         st.session_state.pop("selected_group_id", None)
@@ -116,7 +118,10 @@ try:
                     "selected_group_id"
                 )
 
-                if selected_group_id not in group_ids:
+                if (
+                    selected_group_id is not None
+                    and selected_group_id not in group_ids
+                ):
                     st.session_state.pop("selected_group_id", None)
                     st.session_state.pop("selected_group_selector", None)
                     selected_group_id = None
@@ -139,18 +144,60 @@ try:
                 )
 
                 if chosen_group_id is not None:
+                    if chosen_group_id != selected_group_id:
+                        st.session_state.pop("member_username", None)
                     st.session_state["selected_group_id"] = (
                         chosen_group_id
                     )
                     chosen_group = group_by_id[chosen_group_id]
+                    active_group = chosen_group
                     st.write(f"Selected group: {chosen_group['name']}")
         except (LookupError, RuntimeError) as error:
             st.session_state.pop("selected_group_id", None)
             st.session_state.pop("selected_group_selector", None)
+            st.error(str(error))
+
+    st.subheader("Group members")
+
+    if active_group is None:
+        st.info("Select a group to view its members.")
+    else:
+        try:
+            if active_group["creator_id"] == active_user_id:
+                member_username = st.text_input(
+                    "Exact username to add",
+                    key="member_username",
+                )
+
+                if st.button("Add group member"):
+                    added_member = core.add_group_member_by_username(
+                        DATABASE_PATH,
+                        int(active_group["group_id"]),
+                        int(active_user_id),
+                        member_username,
+                    )
+                    st.success(
+                        f"Added group member: {added_member['username']}"
+                    )
+
+            members = storage.list_group_members(
+                DATABASE_PATH,
+                int(active_group["group_id"]),
+            )
+
+            for member in members:
+                st.write(member["username"])
+        except (
+            ValueError,
+            LookupError,
+            PermissionError,
+            RuntimeError,
+        ) as error:
             st.error(str(error))
 except RuntimeError as error:
     st.session_state.pop("current_user_id", None)
     st.session_state.pop("current_user_selector", None)
     st.session_state.pop("selected_group_id", None)
     st.session_state.pop("selected_group_selector", None)
+    st.session_state.pop("member_username", None)
     st.error(str(error))
