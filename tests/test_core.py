@@ -4,12 +4,15 @@ from pathlib import Path
 
 from taskhub.core import (
     add_group_member_by_username,
+    complete_assigned_task,
     create_group,
     create_assigned_task,
     create_profile,
     get_group_tasks,
+    get_assigned_incomplete_tasks,
     list_user_groups,
     validate_group_name,
+    validate_ai_username_suggestion,
     validate_task_fields,
     validate_username,
 )
@@ -78,6 +81,37 @@ class TestProfileCore(unittest.TestCase):
         self.assertEqual(first_profile["username"], "Alex")
         self.assertEqual(second_profile["username"], "alex")
         self.assertEqual(spaced_profile["username"], " Alex ")
+
+
+class TestAIUsernameSuggestionCore(unittest.TestCase):
+    def test_valid_unused_suggestion_is_returned(self):
+        suggestion = validate_ai_username_suggestion(
+            "SunnyCoder",
+            ["Alex", "Jordan"],
+        )
+
+        self.assertEqual(suggestion, "SunnyCoder")
+
+    def test_blank_and_whitespace_suggestions_are_rejected(self):
+        for suggestion in ("", "   "):
+            with self.subTest(suggestion=repr(suggestion)):
+                with self.assertRaisesRegex(ValueError, "unavailable"):
+                    validate_ai_username_suggestion(suggestion, [])
+
+    def test_suggestions_outside_length_boundaries_are_rejected(self):
+        for suggestion in ("A", "A" * 31):
+            with self.subTest(suggestion_length=len(suggestion)):
+                with self.assertRaisesRegex(ValueError, "unavailable"):
+                    validate_ai_username_suggestion(suggestion, [])
+
+    def test_exact_duplicate_suggestion_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "unavailable"):
+            validate_ai_username_suggestion("Alex", ["Alex", "Jordan"])
+
+    def test_capitalization_is_significant_for_duplicates(self):
+        suggestion = validate_ai_username_suggestion("alex", ["Alex"])
+
+        self.assertEqual(suggestion, "alex")
 
 
 class TestGroupCore(unittest.TestCase):
@@ -488,6 +522,135 @@ class TestAssignedTaskCore(unittest.TestCase):
                 self.group["group_id"],
                 self.taylor["user_id"],
             )
+
+    def test_assignee_can_complete_incomplete_task(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+
+        message = complete_assigned_task(
+            self.database_path,
+            task["task_id"],
+            self.jordan["user_id"],
+        )
+
+        self.assertEqual(message, "Task marked complete.")
+        self.assertEqual(
+            get_task_by_id(
+                self.database_path,
+                task["task_id"],
+            )["status"],
+            "complete",
+        )
+
+    def test_nonassignee_cannot_complete_task(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+
+        with self.assertRaisesRegex(PermissionError, "assignee"):
+            complete_assigned_task(
+                self.database_path,
+                task["task_id"],
+                self.alex["user_id"],
+            )
+
+        self.assertEqual(
+            get_task_by_id(
+                self.database_path,
+                task["task_id"],
+            )["status"],
+            "incomplete",
+        )
+
+    def test_missing_task_cannot_be_completed(self):
+        with self.assertRaisesRegex(LookupError, "not found"):
+            complete_assigned_task(
+                self.database_path,
+                999,
+                self.alex["user_id"],
+            )
+
+    def test_inaccessible_group_task_cannot_be_completed(self):
+        private_group = create_group(
+            self.database_path,
+            "Private",
+            self.taylor["user_id"],
+        )
+        private_task = create_assigned_task(
+            self.database_path,
+            private_group["group_id"],
+            self.taylor["user_id"],
+            "Private task",
+            "Only Taylor can access this",
+            self.taylor["user_id"],
+        )
+
+        with self.assertRaisesRegex(PermissionError, "access"):
+            complete_assigned_task(
+                self.database_path,
+                private_task["task_id"],
+                self.jordan["user_id"],
+            )
+
+        self.assertEqual(
+            get_task_by_id(
+                self.database_path,
+                private_task["task_id"],
+            )["status"],
+            "incomplete",
+        )
+
+    def test_repeated_completion_returns_information(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+        complete_assigned_task(
+            self.database_path,
+            task["task_id"],
+            self.jordan["user_id"],
+        )
+
+        second_message = complete_assigned_task(
+            self.database_path,
+            task["task_id"],
+            self.jordan["user_id"],
+        )
+
+        self.assertEqual(second_message, "Task is already complete.")
+
+    def test_no_assigned_incomplete_tasks_returns_empty_list(self):
+        create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+
+        tasks = get_assigned_incomplete_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+        )
+
+        self.assertEqual(tasks, [])
 
 
 if __name__ == "__main__":

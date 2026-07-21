@@ -45,6 +45,41 @@ class TestUserStorage(unittest.TestCase):
     def test_new_database_has_no_users(self):
         self.assertEqual(list_users(self.database_path), [])
 
+    def test_missing_database_is_initialized_as_empty(self):
+        missing_path = (
+            Path(self.temporary_directory.name) / "missing_taskhub.db"
+        )
+
+        self.assertFalse(missing_path.exists())
+
+        initialize_storage(missing_path)
+
+        self.assertTrue(missing_path.exists())
+        self.assertEqual(list_users(missing_path), [])
+
+    def test_invalid_database_file_is_not_replaced(self):
+        invalid_path = (
+            Path(self.temporary_directory.name) / "invalid_taskhub.db"
+        )
+        original_contents = b"This is not a SQLite database."
+        invalid_path.write_bytes(original_contents)
+
+        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+            initialize_storage(invalid_path)
+
+        self.assertEqual(invalid_path.read_bytes(), original_contents)
+
+    def test_existing_empty_file_is_not_silently_initialized(self):
+        empty_path = (
+            Path(self.temporary_directory.name) / "empty_taskhub.db"
+        )
+        empty_path.write_bytes(b"")
+
+        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+            initialize_storage(empty_path)
+
+        self.assertEqual(empty_path.read_bytes(), b"")
+
     def test_exact_duplicate_username_is_rejected(self):
         create_user(self.database_path, "Alex")
 

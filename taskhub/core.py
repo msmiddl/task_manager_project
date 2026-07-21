@@ -11,6 +11,24 @@ def validate_username(username: str) -> None:
         raise ValueError("The username must contain 2 to 30 characters.")
 
 
+def validate_ai_username_suggestion(
+    raw_suggestion: str,
+    existing_usernames: list[str],
+) -> str:
+    """Return a valid unused AI suggestion or raise a safe error."""
+    unavailable_message = "AI username suggestion is unavailable."
+
+    try:
+        validate_username(raw_suggestion)
+    except ValueError as error:
+        raise ValueError(unavailable_message) from error
+
+    if raw_suggestion in existing_usernames:
+        raise ValueError(unavailable_message)
+
+    return raw_suggestion
+
+
 def create_profile(
     database_path: DatabasePath,
     username: str,
@@ -194,3 +212,53 @@ def get_group_tasks(
         }
         for task in tasks
     ]
+
+
+def get_assigned_incomplete_tasks(
+    database_path: DatabasePath,
+    group_id: int,
+    current_user_id: int,
+) -> list[dict[str, int | str | bool]]:
+    """Return incomplete group tasks assigned to the current user."""
+    tasks = get_group_tasks(database_path, group_id, current_user_id)
+    return [
+        task
+        for task in tasks
+        if task["assigned_to_current_user"]
+        and task["status"] == "incomplete"
+    ]
+
+
+def complete_assigned_task(
+    database_path: DatabasePath,
+    task_id: int,
+    current_user_id: int,
+) -> str:
+    """Complete an accessible task only for its selected assignee."""
+    task = storage.get_task_by_id(database_path, task_id)
+    if task is None:
+        raise LookupError("The task was not found.")
+
+    group_id = int(task["group_id"])
+    if not storage.is_group_member(
+        database_path,
+        group_id,
+        current_user_id,
+    ):
+        raise PermissionError("The current user cannot access that task.")
+
+    if task["assignee_id"] != current_user_id:
+        raise PermissionError(
+            "Only the task assignee can mark it complete."
+        )
+
+    if task["status"] == "complete":
+        return "Task is already complete."
+
+    result = storage.complete_task(database_path, task_id)
+    if result == "completed":
+        return "Task marked complete."
+    if result == "already_complete":
+        return "Task is already complete."
+
+    raise LookupError("The task was not found.")

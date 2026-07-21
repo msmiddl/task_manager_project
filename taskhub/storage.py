@@ -14,6 +14,20 @@ CompletionResult: TypeAlias = Literal[
     "not_found",
 ]
 
+REQUIRED_TABLE_COLUMNS = {
+    "users": {"user_id", "username"},
+    "groups": {"group_id", "name", "creator_id"},
+    "memberships": {"group_id", "user_id"},
+    "tasks": {
+        "task_id",
+        "group_id",
+        "title",
+        "description",
+        "assignee_id",
+        "status",
+    },
+}
+
 
 @contextmanager
 def open_connection(
@@ -36,10 +50,37 @@ def open_connection(
         connection.close()
 
 
+def _validate_existing_storage(connection: sqlite3.Connection) -> None:
+    """Confirm an existing file has the approved TaskHub schema."""
+    check_result = connection.execute("PRAGMA quick_check").fetchone()
+    if check_result is None or check_result[0] != "ok":
+        raise sqlite3.DatabaseError("The database integrity check failed.")
+
+    for table_name, required_columns in REQUIRED_TABLE_COLUMNS.items():
+        rows = connection.execute(
+            f"PRAGMA table_info({table_name})"
+        ).fetchall()
+        saved_columns = {row["name"] for row in rows}
+        if saved_columns != required_columns:
+            raise sqlite3.DatabaseError(
+                "The database does not have the TaskHub schema."
+            )
+
+    if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise sqlite3.DatabaseError(
+            "The database contains invalid relationships."
+        )
+
+
 def initialize_storage(database_path: DatabasePath) -> None:
-    """Create the user-profile table when it does not already exist."""
+    """Create missing storage or validate an existing TaskHub database."""
+    database_already_exists = Path(database_path).exists()
+
     try:
         with open_connection(database_path) as connection:
+            if database_already_exists:
+                _validate_existing_storage(connection)
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (

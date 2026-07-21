@@ -2,10 +2,16 @@ from pathlib import Path
 
 import streamlit as st
 
-from taskhub import core, storage
+from taskhub import ai_service, core, storage
 
 
 DATABASE_PATH = Path("data/taskhub.db")
+USER_FACING_ERRORS = (
+    ValueError,
+    LookupError,
+    PermissionError,
+    RuntimeError,
+)
 
 st.title("TaskHub")
 
@@ -18,9 +24,7 @@ try:
         try:
             profile = core.create_profile(DATABASE_PATH, username)
             st.success(f"Created profile: {profile['username']}")
-        except ValueError as error:
-            st.error(str(error))
-        except RuntimeError as error:
+        except USER_FACING_ERRORS as error:
             st.error(str(error))
 
     st.subheader("Saved profiles")
@@ -31,6 +35,19 @@ try:
             st.write(saved_profile["username"])
     else:
         st.info("No profiles have been created yet.")
+
+    st.subheader("Username suggestion")
+
+    if st.button("Suggest a username"):
+        try:
+            raw_suggestion = ai_service.request_username_suggestion()
+            suggestion = core.validate_ai_username_suggestion(
+                raw_suggestion,
+                [profile["username"] for profile in profiles],
+            )
+            st.success(f"Suggested username: {suggestion}")
+        except USER_FACING_ERRORS as error:
+            st.error(str(error))
 
     st.subheader("Current user")
     active_user_id = None
@@ -100,7 +117,7 @@ try:
                     active_user_id,
                 )
                 st.success(f"Created group: {created_group['name']}")
-            except (ValueError, LookupError, RuntimeError) as error:
+            except USER_FACING_ERRORS as error:
                 st.error(str(error))
 
         try:
@@ -161,7 +178,7 @@ try:
                     chosen_group = group_by_id[chosen_group_id]
                     active_group = chosen_group
                     st.write(f"Selected group: {chosen_group['name']}")
-        except (LookupError, RuntimeError) as error:
+        except USER_FACING_ERRORS as error:
             st.session_state.pop("selected_group_id", None)
             st.session_state.pop("selected_group_selector", None)
             st.error(str(error))
@@ -195,14 +212,12 @@ try:
                 int(active_group["group_id"]),
             )
 
-            for member in group_members:
-                st.write(member["username"])
-        except (
-            ValueError,
-            LookupError,
-            PermissionError,
-            RuntimeError,
-        ) as error:
+            if group_members:
+                for member in group_members:
+                    st.write(member["username"])
+            else:
+                st.info("The selected group has no members.")
+        except USER_FACING_ERRORS as error:
             st.error(str(error))
 
     st.subheader("Create task")
@@ -243,12 +258,7 @@ try:
                 st.success(
                     f"Created incomplete task: {created_task['title']}"
                 )
-            except (
-                ValueError,
-                LookupError,
-                PermissionError,
-                RuntimeError,
-            ) as error:
+            except USER_FACING_ERRORS as error:
                 st.error(str(error))
 
     st.subheader("Group tasks")
@@ -257,6 +267,15 @@ try:
         st.info("Select a group to view its tasks.")
     else:
         try:
+            completion_message = st.session_state.pop(
+                "task_completion_message",
+                None,
+            )
+            if completion_message == "Task marked complete.":
+                st.success(completion_message)
+            elif completion_message is not None:
+                st.info(completion_message)
+
             group_tasks = core.get_group_tasks(
                 DATABASE_PATH,
                 int(active_group["group_id"]),
@@ -266,6 +285,17 @@ try:
             if not group_tasks:
                 st.info("The selected group has no tasks.")
             else:
+                assigned_incomplete_tasks = [
+                    task
+                    for task in group_tasks
+                    if task["assigned_to_current_user"]
+                    and task["status"] == "incomplete"
+                ]
+                if not assigned_incomplete_tasks:
+                    st.info(
+                        "The current user has no assigned incomplete tasks."
+                    )
+
                 for task in group_tasks:
                     st.write(f"Title: {task['title']}")
                     st.write(f"Description: {task['description']}")
@@ -275,8 +305,28 @@ try:
                     st.write(f"Status: {task['status']}")
                     if task["assigned_to_current_user"]:
                         st.write("Assigned to you")
+                    if (
+                        task["assigned_to_current_user"]
+                        and task["status"] == "incomplete"
+                    ):
+                        if st.button(
+                            "Mark complete",
+                            key=f"complete_task_{task['task_id']}",
+                        ):
+                            try:
+                                message = core.complete_assigned_task(
+                                    DATABASE_PATH,
+                                    int(task["task_id"]),
+                                    int(active_user_id),
+                                )
+                                st.session_state[
+                                    "task_completion_message"
+                                ] = message
+                                st.rerun()
+                            except USER_FACING_ERRORS as error:
+                                st.error(str(error))
                     st.divider()
-        except (PermissionError, RuntimeError) as error:
+        except USER_FACING_ERRORS as error:
             st.error(str(error))
 except RuntimeError as error:
     st.session_state.pop("current_user_id", None)
