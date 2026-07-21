@@ -219,3 +219,94 @@ def list_groups_for_user(
         }
         for row in rows
     ]
+
+
+def add_group_member(
+    database_path: DatabasePath,
+    group_id: int,
+    user_id: int,
+) -> None:
+    """Add one existing user to one existing group."""
+    with open_connection(database_path) as connection:
+        try:
+            group_exists = connection.execute(
+                "SELECT 1 FROM groups WHERE group_id = ?",
+                (group_id,),
+            ).fetchone()
+            if group_exists is None:
+                raise LookupError("The group could not be found.")
+
+            user_exists = connection.execute(
+                "SELECT 1 FROM users WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if user_exists is None:
+                raise LookupError("The user could not be found.")
+
+            connection.execute(
+                """
+                INSERT INTO memberships (group_id, user_id)
+                VALUES (?, ?)
+                """,
+                (group_id, user_id),
+            )
+            connection.commit()
+        except sqlite3.IntegrityError as error:
+            connection.rollback()
+            raise ValueError(
+                "That user is already a member of the group."
+            ) from error
+        except sqlite3.Error as error:
+            connection.rollback()
+            raise RuntimeError(
+                "The group membership could not be saved."
+            ) from error
+
+
+def is_group_member(
+    database_path: DatabasePath,
+    group_id: int,
+    user_id: int,
+) -> bool:
+    """Return whether a user belongs to a group."""
+    try:
+        with open_connection(database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM memberships
+                WHERE group_id = ? AND user_id = ?
+                """,
+                (group_id, user_id),
+            ).fetchone()
+    except sqlite3.Error as error:
+        raise RuntimeError("Group membership could not be checked.") from error
+
+    return row is not None
+
+
+def list_group_members(
+    database_path: DatabasePath,
+    group_id: int,
+) -> list[UserRecord]:
+    """Return all profiles belonging to a group."""
+    try:
+        with open_connection(database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT users.user_id, users.username
+                FROM users
+                JOIN memberships
+                    ON memberships.user_id = users.user_id
+                WHERE memberships.group_id = ?
+                ORDER BY users.user_id
+                """,
+                (group_id,),
+            ).fetchall()
+    except sqlite3.Error as error:
+        raise RuntimeError("Group members could not be loaded.") from error
+
+    return [
+        {"user_id": row["user_id"], "username": row["username"]}
+        for row in rows
+    ]

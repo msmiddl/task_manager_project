@@ -3,11 +3,14 @@ import unittest
 from pathlib import Path
 
 from taskhub.storage import (
+    add_group_member,
     create_group,
     create_user,
     get_user_by_id,
     get_user_by_username,
     initialize_storage,
+    is_group_member,
+    list_group_members,
     list_groups_for_user,
     list_users,
     open_connection,
@@ -169,6 +172,99 @@ class TestUserStorage(unittest.TestCase):
             ).fetchone()[0]
 
         self.assertEqual(group_count, 0)
+
+    def test_add_and_list_group_member(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        add_group_member(self.database_path, group_id, jordan_id)
+
+        self.assertTrue(
+            is_group_member(self.database_path, group_id, alex_id)
+        )
+        self.assertTrue(
+            is_group_member(self.database_path, group_id, jordan_id)
+        )
+        self.assertEqual(
+            list_group_members(self.database_path, group_id),
+            [
+                {"user_id": alex_id, "username": "Alex"},
+                {"user_id": jordan_id, "username": "Jordan"},
+            ],
+        )
+
+    def test_duplicate_group_membership_is_rejected(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        add_group_member(self.database_path, group_id, jordan_id)
+
+        with self.assertRaisesRegex(ValueError, "already a member"):
+            add_group_member(self.database_path, group_id, jordan_id)
+
+        self.assertEqual(
+            len(list_group_members(self.database_path, group_id)),
+            2,
+        )
+
+    def test_membership_rejects_missing_user_reference(self):
+        alex_id = create_user(self.database_path, "Alex")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        with self.assertRaisesRegex(LookupError, "user"):
+            add_group_member(self.database_path, group_id, 999)
+
+    def test_membership_rejects_missing_group_reference(self):
+        jordan_id = create_user(self.database_path, "Jordan")
+
+        with self.assertRaisesRegex(LookupError, "group"):
+            add_group_member(self.database_path, 999, jordan_id)
+
+    def test_group_membership_remains_after_reconnecting(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        add_group_member(self.database_path, group_id, jordan_id)
+
+        saved_members = list_group_members(
+            self.database_path,
+            group_id,
+        )
+
+        self.assertEqual(
+            [member["username"] for member in saved_members],
+            ["Alex", "Jordan"],
+        )
+
+    def test_nonmember_check_returns_false(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+
+        self.assertFalse(
+            is_group_member(self.database_path, group_id, jordan_id)
+        )
 
 
 if __name__ == "__main__":
