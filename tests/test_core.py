@@ -7,6 +7,7 @@ from taskhub.core import (
     create_group,
     create_assigned_task,
     create_profile,
+    get_group_tasks,
     list_user_groups,
     validate_group_name,
     validate_task_fields,
@@ -450,6 +451,43 @@ class TestAssignedTaskCore(unittest.TestCase):
         self.assertEqual(task["description"], "Wash and dry the dishes")
         self.assertEqual(task["assignee_id"], self.jordan["user_id"])
         self.assertEqual(task["status"], "incomplete")
+
+    def test_group_tasks_mark_only_current_users_assignments(self):
+        create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Buy soap",
+            "Buy dish soap",
+            self.alex["user_id"],
+        )
+        create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+        )
+
+        tasks = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+        )
+
+        self.assertTrue(tasks[0]["assigned_to_current_user"])
+        self.assertFalse(tasks[1]["assigned_to_current_user"])
+        self.assertEqual(tasks[0]["assignee_username"], "Alex")
+        self.assertEqual(tasks[1]["assignee_username"], "Jordan")
+
+    def test_nonmember_cannot_retrieve_group_tasks(self):
+        with self.assertRaisesRegex(PermissionError, "group member"):
+            get_group_tasks(
+                self.database_path,
+                self.group["group_id"],
+                self.taylor["user_id"],
+            )
 
 
 if __name__ == "__main__":

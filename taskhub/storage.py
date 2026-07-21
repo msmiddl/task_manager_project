@@ -420,3 +420,44 @@ def get_task_by_id(
         "assignee_id": row["assignee_id"],
         "status": row["status"],
     }
+
+
+def list_tasks_for_group(
+    database_path: DatabasePath,
+    group_id: int,
+) -> list[dict[str, int | str]]:
+    """Return one group's tasks with assignee display names."""
+    try:
+        with open_connection(database_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    tasks.task_id,
+                    tasks.group_id,
+                    tasks.title,
+                    tasks.description,
+                    tasks.assignee_id,
+                    users.username AS assignee_username,
+                    tasks.status
+                FROM tasks
+                JOIN users ON users.user_id = tasks.assignee_id
+                WHERE tasks.group_id = ?
+                ORDER BY tasks.task_id
+                """,
+                (group_id,),
+            ).fetchall()
+    except sqlite3.Error as error:
+        raise RuntimeError("Group tasks could not be loaded.") from error
+
+    return [
+        {
+            "task_id": row["task_id"],
+            "group_id": row["group_id"],
+            "title": row["title"],
+            "description": row["description"],
+            "assignee_id": row["assignee_id"],
+            "assignee_username": row["assignee_username"],
+            "status": row["status"],
+        }
+        for row in rows
+    ]

@@ -167,3 +167,30 @@ def create_assigned_task(
         "assignee_id": assignee_id,
         "status": "incomplete",
     }
+
+
+def get_group_tasks(
+    database_path: DatabasePath,
+    group_id: int,
+    current_user_id: int,
+) -> list[dict[str, int | str | bool]]:
+    """Return accessible group tasks with current-user markers."""
+    if not storage.is_group_member(
+        database_path,
+        group_id,
+        current_user_id,
+    ):
+        raise PermissionError(
+            "Only a group member can view that group's tasks."
+        )
+
+    tasks = storage.list_tasks_for_group(database_path, group_id)
+    return [
+        {
+            **task,
+            "assigned_to_current_user": (
+                task["assignee_id"] == current_user_id
+            ),
+        }
+        for task in tasks
+    ]

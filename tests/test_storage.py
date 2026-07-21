@@ -14,6 +14,7 @@ from taskhub.storage import (
     initialize_storage,
     is_group_member,
     list_group_members,
+    list_tasks_for_group,
     list_groups_for_user,
     list_users,
     open_connection,
@@ -399,6 +400,75 @@ class TestUserStorage(unittest.TestCase):
 
     def test_missing_task_identifier_returns_none(self):
         self.assertIsNone(get_task_by_id(self.database_path, 999))
+
+    def test_list_group_tasks_includes_assignee_username(self):
+        alex_id = create_user(self.database_path, "Alex")
+        jordan_id = create_user(self.database_path, "Jordan")
+        group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        add_group_member(self.database_path, group_id, jordan_id)
+        task_id = create_assigned_task(
+            self.database_path,
+            group_id,
+            "Wash dishes",
+            "Wash and dry the dishes",
+            jordan_id,
+        )
+
+        tasks = list_tasks_for_group(self.database_path, group_id)
+
+        self.assertEqual(
+            tasks,
+            [
+                {
+                    "task_id": task_id,
+                    "group_id": group_id,
+                    "title": "Wash dishes",
+                    "description": "Wash and dry the dishes",
+                    "assignee_id": jordan_id,
+                    "assignee_username": "Jordan",
+                    "status": "incomplete",
+                }
+            ],
+        )
+
+    def test_list_group_tasks_excludes_other_groups(self):
+        alex_id = create_user(self.database_path, "Alex")
+        first_group_id = create_group(
+            self.database_path,
+            "Roommates",
+            alex_id,
+        )
+        second_group_id = create_group(
+            self.database_path,
+            "Class Project",
+            alex_id,
+        )
+        create_assigned_task(
+            self.database_path,
+            first_group_id,
+            "Wash dishes",
+            "Wash and dry the dishes",
+            alex_id,
+        )
+        create_assigned_task(
+            self.database_path,
+            second_group_id,
+            "Write report",
+            "Write the project report",
+            alex_id,
+        )
+
+        tasks = list_tasks_for_group(
+            self.database_path,
+            first_group_id,
+        )
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["title"], "Wash dishes")
 
 
 if __name__ == "__main__":
