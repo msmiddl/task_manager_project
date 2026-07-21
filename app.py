@@ -250,6 +250,34 @@ try:
                 RuntimeError,
             ) as error:
                 st.error(str(error))
+
+    st.subheader("Group tasks")
+
+    if active_group is None:
+        st.info("Select a group to view its tasks.")
+    else:
+        try:
+            group_tasks = core.get_group_tasks(
+                DATABASE_PATH,
+                int(active_group["group_id"]),
+                int(active_user_id),
+            )
+
+            if not group_tasks:
+                st.info("The selected group has no tasks.")
+            else:
+                for task in group_tasks:
+                    st.write(f"Title: {task['title']}")
+                    st.write(f"Description: {task['description']}")
+                    st.write(
+                        f"Assignee: {task['assignee_username']}"
+                    )
+                    st.write(f"Status: {task['status']}")
+                    if task["assigned_to_current_user"]:
+                        st.write("Assigned to you")
+                    st.divider()
+        except (PermissionError, RuntimeError) as error:
+            st.error(str(error))
 except RuntimeError as error:
     st.session_state.pop("current_user_id", None)
     st.session_state.pop("current_user_selector", None)
