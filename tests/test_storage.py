@@ -1,6 +1,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import date
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from taskhub.storage import (
 
 def create_legacy_taskhub_database(database_path: Path) -> None:
     """Create one valid pre-calendar TaskHub database for migration tests."""
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.executescript(
             """
             PRAGMA foreign_keys = ON;
@@ -81,6 +82,7 @@ def create_legacy_taskhub_database(database_path: Path) -> None:
             );
             """
         )
+        connection.commit()
 
 
 class TestUserStorage(unittest.TestCase):
@@ -545,7 +547,7 @@ class TestUserStorage(unittest.TestCase):
             Path(self.temporary_directory.name) / "blocked_legacy.db"
         )
         create_legacy_taskhub_database(legacy_path)
-        with sqlite3.connect(legacy_path) as connection:
+        with closing(sqlite3.connect(legacy_path)) as connection:
             connection.execute(
                 """
                 CREATE TRIGGER block_task_updates
@@ -555,11 +557,12 @@ class TestUserStorage(unittest.TestCase):
                 END
                 """
             )
+            connection.commit()
 
         with self.assertRaisesRegex(RuntimeError, "unavailable"):
             initialize_storage(legacy_path, date(2026, 7, 21))
 
-        with sqlite3.connect(legacy_path) as connection:
+        with closing(sqlite3.connect(legacy_path)) as connection:
             columns = {
                 row[1]
                 for row in connection.execute(
@@ -786,6 +789,8 @@ class TestUserStorage(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             alex_id,
+            "2026-07-25",
+            "high",
         )
         create_assigned_task(
             self.database_path,
@@ -793,6 +798,8 @@ class TestUserStorage(unittest.TestCase):
             "Write report",
             "Write the project report",
             alex_id,
+            "2026-08-01",
+            "low",
         )
 
         tasks = list_tasks_for_group(
@@ -802,6 +809,8 @@ class TestUserStorage(unittest.TestCase):
 
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0]["title"], "Wash dishes")
+        self.assertEqual(tasks[0]["due_date"], "2026-07-25")
+        self.assertEqual(tasks[0]["priority"], "high")
 
 
 if __name__ == "__main__":

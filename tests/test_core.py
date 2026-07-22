@@ -1,18 +1,31 @@
 import tempfile
 import unittest
+from copy import deepcopy
+from datetime import date
 from pathlib import Path
 
 from taskhub.core import (
     add_group_member_by_username,
+    calculate_baseline_priority,
+    calculate_completion_progress,
+    calculate_group_task_metrics,
+    calculate_overdue_warning,
     complete_assigned_task,
     create_group,
     create_assigned_task,
     create_profile,
+    filter_tasks,
+    format_priority_display,
     get_group_tasks,
+    get_group_tasks_for_month,
     get_assigned_incomplete_tasks,
     list_user_groups,
+    prepare_priority_recommendation_request,
+    sort_tasks,
+    validate_ai_priority_recommendation,
     validate_group_name,
     validate_ai_username_suggestion,
+    validate_task_schedule,
     validate_task_fields,
     validate_username,
 )
@@ -23,6 +36,251 @@ from taskhub.storage import (
     list_group_members,
     list_users,
 )
+
+
+class TestDashboardCalculations(unittest.TestCase):
+    def test_empty_tasks_produce_zero_metrics_and_progress(self):
+        metrics = calculate_group_task_metrics([], date(2026, 7, 22))
+        progress = calculate_completion_progress([])
+
+        self.assertEqual(
+            metrics,
+            {
+                "total": 0,
+                "incomplete": 0,
+                "complete": 0,
+                "due_soon": 0,
+            },
+        )
+        self.assertEqual(
+            progress,
+            {
+                "completed": 0,
+                "total": 0,
+                "ratio": 0.0,
+                "percentage": 0.0,
+            },
+        )
+
+    def test_mixed_tasks_use_the_approved_due_soon_boundaries(self):
+        tasks = [
+            {"status": "incomplete", "due_date": "2026-07-21"},
+            {"status": "incomplete", "due_date": "2026-07-22"},
+            {"status": "incomplete", "due_date": "2026-07-28"},
+            {"status": "incomplete", "due_date": "2026-07-29"},
+            {"status": "complete", "due_date": "2026-07-24"},
+        ]
+
+        metrics = calculate_group_task_metrics(
+            tasks,
+            date(2026, 7, 22),
+        )
+
+        self.assertEqual(metrics["total"], 5)
+        self.assertEqual(metrics["incomplete"], 4)
+        self.assertEqual(metrics["complete"], 1)
+        self.assertEqual(metrics["due_soon"], 2)
+
+    def test_progress_handles_partial_and_complete_task_lists(self):
+        partial_tasks = [
+            {"status": "complete"} for _ in range(3)
+        ] + [{"status": "incomplete"} for _ in range(5)]
+        complete_tasks = [{"status": "complete"} for _ in range(2)]
+
+        partial_progress = calculate_completion_progress(partial_tasks)
+        complete_progress = calculate_completion_progress(complete_tasks)
+
+        self.assertEqual(partial_progress["completed"], 3)
+        self.assertEqual(partial_progress["total"], 8)
+        self.assertEqual(partial_progress["ratio"], 0.375)
+        self.assertEqual(partial_progress["percentage"], 37.5)
+        self.assertEqual(complete_progress["ratio"], 1.0)
+        self.assertEqual(complete_progress["percentage"], 100.0)
+
+    def test_dashboard_calculations_do_not_change_tasks(self):
+        tasks = [
+            {"status": "complete", "due_date": "2026-07-22"},
+            {"status": "incomplete", "due_date": "2026-07-23"},
+        ]
+        original_tasks = deepcopy(tasks)
+
+        calculate_group_task_metrics(tasks, date(2026, 7, 22))
+        calculate_completion_progress(tasks)
+
+        self.assertEqual(tasks, original_tasks)
+
+
+class TestTaskPresentation(unittest.TestCase):
+    def test_every_priority_has_an_icon_and_text_label(self):
+        expected_labels = {
+            "high": "🔴 High",
+            "medium": "🟡 Medium",
+            "low": "🟢 Low",
+        }
+
+        for priority, expected_label in expected_labels.items():
+            with self.subTest(priority=priority):
+                self.assertEqual(
+                    format_priority_display(priority),
+                    expected_label,
+                )
+
+    def test_unsupported_priority_has_no_display_label(self):
+        with self.assertRaisesRegex(ValueError, "invalid priority"):
+            format_priority_display("urgent")
+
+    def test_only_incomplete_past_tasks_have_overdue_warning(self):
+        current_date = date(2026, 7, 22)
+        schedules = (
+            ("2026-07-21", "incomplete", "⚠️ Overdue"),
+            ("2026-07-22", "incomplete", ""),
+            ("2026-07-23", "incomplete", ""),
+            ("2026-07-21", "complete", ""),
+        )
+
+        for due_date, status, expected_warning in schedules:
+            with self.subTest(due_date=due_date, status=status):
+                self.assertEqual(
+                    calculate_overdue_warning(
+                        due_date,
+                        status,
+                        current_date,
+                    ),
+                    expected_warning,
+                )
+
+
+class TestTaskFilteringAndSorting(unittest.TestCase):
+    def setUp(self):
+        self.tasks = [
+            {
+                "task_id": 3,
+                "status": "incomplete",
+                "priority": "medium",
+                "due_date": "2026-07-25",
+                "assignee_username": "alex",
+                "assigned_to_current_user": False,
+            },
+            {
+                "task_id": 1,
+                "status": "complete",
+                "priority": "high",
+                "due_date": "2026-07-24",
+                "assignee_username": "Jordan",
+                "assigned_to_current_user": True,
+            },
+            {
+                "task_id": 4,
+                "status": "incomplete",
+                "priority": "low",
+                "due_date": "2026-07-24",
+                "assignee_username": "Alex",
+                "assigned_to_current_user": True,
+            },
+            {
+                "task_id": 2,
+                "status": "incomplete",
+                "priority": "high",
+                "due_date": "2026-07-26",
+                "assignee_username": "Jordan",
+                "assigned_to_current_user": False,
+            },
+        ]
+
+    def task_ids(self, tasks):
+        return [task["task_id"] for task in tasks]
+
+    def test_every_status_and_ownership_filter(self):
+        expected_ids = {
+            "All tasks": [3, 1, 4, 2],
+            "Assigned to me": [1, 4],
+            "Incomplete": [3, 4, 2],
+            "Complete": [1],
+        }
+
+        for status_filter, task_ids in expected_ids.items():
+            with self.subTest(status_filter=status_filter):
+                filtered_tasks = filter_tasks(
+                    self.tasks,
+                    status_filter,
+                    "All priorities",
+                )
+                self.assertEqual(self.task_ids(filtered_tasks), task_ids)
+
+    def test_every_priority_filter(self):
+        expected_ids = {
+            "All priorities": [3, 1, 4, 2],
+            "High": [1, 2],
+            "Medium": [3],
+            "Low": [4],
+        }
+
+        for priority_filter, task_ids in expected_ids.items():
+            with self.subTest(priority_filter=priority_filter):
+                filtered_tasks = filter_tasks(
+                    self.tasks,
+                    "All tasks",
+                    priority_filter,
+                )
+                self.assertEqual(self.task_ids(filtered_tasks), task_ids)
+
+    def test_status_and_priority_filters_use_and_logic(self):
+        filtered_tasks = filter_tasks(
+            self.tasks,
+            "Incomplete",
+            "High",
+        )
+
+        self.assertEqual(self.task_ids(filtered_tasks), [2])
+
+    def test_every_sort_order_uses_task_identifier_for_ties(self):
+        expected_ids = {
+            "Due date": [1, 4, 3, 2],
+            "Priority": [1, 2, 3, 4],
+            "Assignee": [4, 1, 2, 3],
+            "Status": [2, 3, 4, 1],
+        }
+
+        for sort_by, task_ids in expected_ids.items():
+            with self.subTest(sort_by=sort_by):
+                sorted_tasks = sort_tasks(self.tasks, sort_by)
+                self.assertEqual(self.task_ids(sorted_tasks), task_ids)
+
+    def test_empty_and_single_task_collections_are_supported(self):
+        self.assertEqual(
+            filter_tasks([], "All tasks", "All priorities"),
+            [],
+        )
+        self.assertEqual(sort_tasks([], "Due date"), [])
+
+        single_task = [self.tasks[0]]
+        self.assertEqual(
+            filter_tasks(single_task, "All tasks", "All priorities"),
+            single_task,
+        )
+        self.assertEqual(sort_tasks(single_task, "Due date"), single_task)
+
+    def test_invalid_filter_and_sort_options_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "status filter"):
+            filter_tasks(self.tasks, "Mine", "All priorities")
+        with self.assertRaisesRegex(ValueError, "priority filter"):
+            filter_tasks(self.tasks, "All tasks", "Urgent")
+        with self.assertRaisesRegex(ValueError, "sort option"):
+            sort_tasks(self.tasks, "Title")
+
+    def test_filtering_and_sorting_do_not_change_original_tasks(self):
+        original_tasks = deepcopy(self.tasks)
+
+        filtered_tasks = filter_tasks(
+            self.tasks,
+            "Incomplete",
+            "High",
+        )
+        sorted_tasks = sort_tasks(self.tasks, "Priority")
+
+        self.assertEqual(self.tasks, original_tasks)
+        self.assertIsNot(filtered_tasks, self.tasks)
+        self.assertIsNot(sorted_tasks, self.tasks)
 
 
 class TestProfileCore(unittest.TestCase):
@@ -112,6 +370,97 @@ class TestAIUsernameSuggestionCore(unittest.TestCase):
         suggestion = validate_ai_username_suggestion("alex", ["Alex"])
 
         self.assertEqual(suggestion, "alex")
+
+
+class TestAIPriorityRecommendationCore(unittest.TestCase):
+    def test_valid_request_fields_are_prepared_with_baseline(self):
+        request_fields = prepare_priority_recommendation_request(
+            "Submit report",
+            "Submit the final course report",
+            "2026-07-25",
+            date(2026, 7, 22),
+        )
+
+        self.assertEqual(
+            request_fields,
+            {
+                "title": "Submit report",
+                "description": "Submit the final course report",
+                "current_date": "2026-07-22",
+                "due_date": "2026-07-25",
+                "baseline_priority": "high",
+            },
+        )
+
+    def test_invalid_request_fields_are_rejected_before_ai(self):
+        invalid_fields = (
+            ("", "Description", "2026-07-25", "title"),
+            ("Title", "", "2026-07-25", "description"),
+            ("Title", "Description", "2026-02-30", "due date"),
+        )
+
+        for title, description, due_date, field_name in invalid_fields:
+            with self.subTest(field=field_name):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    prepare_priority_recommendation_request(
+                        title,
+                        description,
+                        due_date,
+                        date(2026, 7, 22),
+                    )
+
+    def test_valid_recommendations_are_normalized(self):
+        cases = (
+            (" LOW \n Can wait. ", "medium", "low", "Can wait."),
+            (
+                "Medium\nUseful but not urgent.",
+                "medium",
+                "medium",
+                "Useful but not urgent.",
+            ),
+            ("HIGH\nDue very soon.", "high", "high", "Due very soon."),
+        )
+
+        for raw_response, baseline, priority, reason in cases:
+            with self.subTest(priority=priority):
+                self.assertEqual(
+                    validate_ai_priority_recommendation(
+                        raw_response,
+                        baseline,
+                    ),
+                    {"priority": priority, "reason": reason},
+                )
+
+    def test_invalid_recommendation_text_is_rejected(self):
+        invalid_responses = (
+            "urgent\nDo it now.",
+            "high\n",
+            "high\nReason\nExtra text",
+            f"medium\n{'A' * 121}",
+        )
+
+        for raw_response in invalid_responses:
+            with self.subTest(raw_response=raw_response):
+                with self.assertRaisesRegex(ValueError, "unavailable"):
+                    validate_ai_priority_recommendation(
+                        raw_response,
+                        "medium",
+                    )
+
+    def test_recommendation_cannot_make_disallowed_priority_jump(self):
+        disallowed = (
+            ("high\nVery important.", "low"),
+            ("low\nCan wait.", "high"),
+            ("medium\nCan wait a little.", "high"),
+        )
+
+        for raw_response, baseline in disallowed:
+            with self.subTest(baseline=baseline):
+                with self.assertRaisesRegex(ValueError, "unavailable"):
+                    validate_ai_priority_recommendation(
+                        raw_response,
+                        baseline,
+                    )
 
 
 class TestGroupCore(unittest.TestCase):
@@ -379,6 +728,114 @@ class TestAssignedTaskCore(unittest.TestCase):
         validate_task_fields("A", "B")
         validate_task_fields("A" * 20, "B" * 100)
 
+    def test_baseline_priority_boundaries(self):
+        current_date = date(2026, 7, 22)
+        cases = (
+            ("2026-07-21", "high"),
+            ("2026-07-22", "high"),
+            ("2026-07-25", "high"),
+            ("2026-07-26", "medium"),
+            ("2026-07-29", "medium"),
+            ("2026-07-30", "low"),
+        )
+
+        for due_date, expected_priority in cases:
+            with self.subTest(due_date=due_date):
+                self.assertEqual(
+                    calculate_baseline_priority(due_date, current_date),
+                    expected_priority,
+                )
+
+    def test_baseline_priority_rejects_missing_due_date(self):
+        for due_date in (None, ""):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "due date.*required",
+                ):
+                    calculate_baseline_priority(
+                        due_date,
+                        date(2026, 7, 22),
+                    )
+
+    def test_baseline_priority_rejects_invalid_due_date(self):
+        for due_date in ("2026-02-30", "2026-7-22", "not-a-date"):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(ValueError, "invalid due date"):
+                    calculate_baseline_priority(
+                        due_date,
+                        date(2026, 7, 22),
+                    )
+
+    def test_valid_due_dates_are_accepted(self):
+        for due_date in (
+            "2020-01-01",
+            "2026-07-21",
+            "2030-12-31",
+            "2028-02-29",
+        ):
+            with self.subTest(due_date=due_date):
+                validate_task_schedule(due_date, "medium")
+
+    def test_missing_due_date_is_rejected(self):
+        for due_date in (None, ""):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(ValueError, "due date.*required"):
+                    validate_task_schedule(due_date, "medium")
+
+    def test_invalid_due_dates_are_rejected(self):
+        for due_date in (
+            "2026-02-30",
+            "2026-2-3",
+            "07/25/2026",
+            "20260725",
+            "not-a-date",
+        ):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(ValueError, "invalid due date"):
+                    validate_task_schedule(due_date, "medium")
+
+    def test_approved_priorities_are_accepted(self):
+        for priority in ("low", "medium", "high"):
+            with self.subTest(priority=priority):
+                validate_task_schedule("2026-07-25", priority)
+
+    def test_missing_priority_is_rejected(self):
+        for priority in (None, ""):
+            with self.subTest(priority=priority):
+                with self.assertRaisesRegex(ValueError, "priority.*required"):
+                    validate_task_schedule("2026-07-25", priority)
+
+    def test_unsupported_priorities_are_rejected(self):
+        for priority in ("urgent", "Medium", "HIGH", " "):
+            with self.subTest(priority=priority):
+                with self.assertRaisesRegex(ValueError, "invalid priority"):
+                    validate_task_schedule("2026-07-25", priority)
+
+    def test_invalid_schedule_does_not_create_a_task(self):
+        invalid_schedules = (
+            (None, "medium", "due date"),
+            ("2026-07-25", None, "priority"),
+            ("2026-02-30", "medium", "due date"),
+            ("2026-07-25", "urgent", "priority"),
+        )
+
+        for due_date, priority, field_name in invalid_schedules:
+            with self.subTest(field=field_name):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    create_assigned_task(
+                        self.database_path,
+                        self.group["group_id"],
+                        self.alex["user_id"],
+                        "Wash dishes",
+                        "Wash and dry the dishes",
+                        self.jordan["user_id"],
+                        due_date,
+                        priority,
+                    )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
     def test_task_fields_over_maximum_are_rejected(self):
         invalid_fields = (
             ("A" * 21, "Description", "title"),
@@ -434,6 +891,8 @@ class TestAssignedTaskCore(unittest.TestCase):
                 "Wash dishes",
                 "Wash and dry the dishes",
                 self.taylor["user_id"],
+                "2026-07-25",
+                "medium",
             )
 
         self.assertIsNone(get_task_by_id(self.database_path, 1))
@@ -447,6 +906,8 @@ class TestAssignedTaskCore(unittest.TestCase):
                 "Wash dishes",
                 "Wash and dry the dishes",
                 self.jordan["user_id"],
+                "2026-07-25",
+                "medium",
             )
 
         self.assertIsNone(get_task_by_id(self.database_path, 1))
@@ -465,6 +926,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Buy soap",
             "Buy dish soap",
             self.taylor["user_id"],
+            "2026-07-25",
+            "low",
         )
 
         self.assertEqual(task["assignee_id"], self.taylor["user_id"])
@@ -478,6 +941,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "high",
         )
 
         self.assertEqual(task["group_id"], self.group["group_id"])
@@ -485,6 +950,8 @@ class TestAssignedTaskCore(unittest.TestCase):
         self.assertEqual(task["description"], "Wash and dry the dishes")
         self.assertEqual(task["assignee_id"], self.jordan["user_id"])
         self.assertEqual(task["status"], "incomplete")
+        self.assertEqual(task["due_date"], "2026-07-25")
+        self.assertEqual(task["priority"], "high")
 
     def test_group_tasks_mark_only_current_users_assignments(self):
         create_assigned_task(
@@ -494,6 +961,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Buy soap",
             "Buy dish soap",
             self.alex["user_id"],
+            "2026-07-24",
+            "medium",
         )
         create_assigned_task(
             self.database_path,
@@ -502,6 +971,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "high",
         )
 
         tasks = get_group_tasks(
@@ -514,6 +985,283 @@ class TestAssignedTaskCore(unittest.TestCase):
         self.assertFalse(tasks[1]["assigned_to_current_user"])
         self.assertEqual(tasks[0]["assignee_username"], "Alex")
         self.assertEqual(tasks[1]["assignee_username"], "Jordan")
+
+    def test_group_tasks_calculate_incomplete_task_date_states(self):
+        schedules = (
+            ("Past task", "2026-07-20", "Overdue"),
+            ("Today task", "2026-07-21", "Due today"),
+            ("Future task", "2026-07-22", ""),
+        )
+        for title, due_date, expected_state in schedules:
+            with self.subTest(title=title):
+                create_assigned_task(
+                    self.database_path,
+                    self.group["group_id"],
+                    self.alex["user_id"],
+                    title,
+                    "Check its calculated date state",
+                    self.alex["user_id"],
+                    due_date,
+                    "medium",
+                )
+
+        tasks = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 21),
+        )
+
+        self.assertEqual(
+            [task["date_state"] for task in tasks],
+            [state for _, _, state in schedules],
+        )
+
+    def test_completed_tasks_have_no_date_state(self):
+        for title, due_date in (
+            ("Past complete", "2026-07-20"),
+            ("Today complete", "2026-07-21"),
+        ):
+            task = create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                title,
+                "Complete before checking the date state",
+                self.alex["user_id"],
+                due_date,
+                "high",
+            )
+            complete_assigned_task(
+                self.database_path,
+                task["task_id"],
+                self.alex["user_id"],
+            )
+
+        tasks = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 21),
+        )
+
+        self.assertEqual(
+            [task["date_state"] for task in tasks],
+            ["", ""],
+        )
+
+    def test_date_state_is_recalculated_for_the_supplied_date(self):
+        create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Boundary task",
+            "Recalculate without changing storage",
+            self.alex["user_id"],
+            "2026-07-22",
+            "low",
+        )
+
+        due_today = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 22),
+        )
+        overdue = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 23),
+        )
+
+        self.assertEqual(due_today[0]["date_state"], "Due today")
+        self.assertEqual(overdue[0]["date_state"], "Overdue")
+        self.assertEqual(due_today[0]["overdue_warning"], "")
+        self.assertEqual(overdue[0]["overdue_warning"], "⚠️ Overdue")
+        self.assertNotIn(
+            "date_state",
+            get_task_by_id(self.database_path, due_today[0]["task_id"]),
+        )
+        self.assertNotIn(
+            "overdue_warning",
+            get_task_by_id(self.database_path, due_today[0]["task_id"]),
+        )
+
+    def test_empty_group_has_no_calculated_task_states(self):
+        self.assertEqual(
+            get_group_tasks(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                date(2026, 7, 21),
+            ),
+            [],
+        )
+
+    def test_calendar_month_returns_tasks_with_required_details(self):
+        incomplete_task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Buy soap",
+            "Buy dish soap",
+            self.alex["user_id"],
+            "2026-07-10",
+            "low",
+        )
+        completed_task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+            "2026-07-25",
+            "high",
+        )
+        complete_assigned_task(
+            self.database_path,
+            completed_task["task_id"],
+            self.jordan["user_id"],
+        )
+
+        tasks = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            7,
+            date(2026, 7, 15),
+        )
+
+        self.assertEqual(
+            [task["task_id"] for task in tasks],
+            [incomplete_task["task_id"], completed_task["task_id"]],
+        )
+        self.assertEqual(tasks[0]["priority"], "low")
+        self.assertEqual(tasks[0]["assignee_username"], "Alex")
+        self.assertEqual(tasks[0]["status"], "incomplete")
+        self.assertEqual(tasks[1]["status"], "complete")
+
+    def test_calendar_month_observes_year_and_month_boundaries(self):
+        for title, due_date in (
+            ("Year end", "2026-12-31"),
+            ("Year start", "2027-01-01"),
+            ("Leap day", "2028-02-29"),
+        ):
+            create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                title,
+                "Check a calendar boundary",
+                self.alex["user_id"],
+                due_date,
+                "medium",
+            )
+
+        december = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            12,
+            date(2026, 12, 1),
+        )
+        january = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2027,
+            1,
+            date(2027, 1, 1),
+        )
+        leap_february = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2028,
+            2,
+            date(2028, 2, 1),
+        )
+
+        self.assertEqual([task["title"] for task in december], ["Year end"])
+        self.assertEqual([task["title"] for task in january], ["Year start"])
+        self.assertEqual(
+            [task["title"] for task in leap_february],
+            ["Leap day"],
+        )
+
+    def test_calendar_month_returns_empty_list_when_no_tasks_are_due(self):
+        self.assertEqual(
+            get_group_tasks_for_month(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                2026,
+                7,
+                date(2026, 7, 1),
+            ),
+            [],
+        )
+
+    def test_calendar_month_is_group_scoped_and_read_only(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Roommate task",
+            "This belongs to Roommates",
+            self.alex["user_id"],
+            "2026-07-10",
+            "medium",
+        )
+        other_group = create_group(
+            self.database_path,
+            "Class Project",
+            self.alex["user_id"],
+        )
+        create_assigned_task(
+            self.database_path,
+            other_group["group_id"],
+            self.alex["user_id"],
+            "Class task",
+            "This belongs to Class Project",
+            self.alex["user_id"],
+            "2026-07-11",
+            "high",
+        )
+        saved_before = get_task_by_id(
+            self.database_path,
+            task["task_id"],
+        )
+
+        tasks = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            7,
+            date(2026, 7, 1),
+        )
+
+        self.assertEqual([item["title"] for item in tasks], ["Roommate task"])
+        self.assertEqual(
+            get_task_by_id(self.database_path, task["task_id"]),
+            saved_before,
+        )
+
+    def test_nonmember_cannot_retrieve_calendar_month(self):
+        with self.assertRaisesRegex(PermissionError, "group member"):
+            get_group_tasks_for_month(
+                self.database_path,
+                self.group["group_id"],
+                self.taylor["user_id"],
+                2026,
+                7,
+                date(2026, 7, 1),
+            )
 
     def test_nonmember_cannot_retrieve_group_tasks(self):
         with self.assertRaisesRegex(PermissionError, "group member"):
@@ -531,6 +1279,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         message = complete_assigned_task(
@@ -556,6 +1306,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         with self.assertRaisesRegex(PermissionError, "assignee"):
@@ -594,6 +1346,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Private task",
             "Only Taylor can access this",
             self.taylor["user_id"],
+            "2026-07-25",
+            "low",
         )
 
         with self.assertRaisesRegex(PermissionError, "access"):
@@ -619,6 +1373,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
         complete_assigned_task(
             self.database_path,
@@ -642,6 +1398,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         tasks = get_assigned_incomplete_tasks(

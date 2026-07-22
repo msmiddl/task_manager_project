@@ -2,22 +2,22 @@
 
 Complete this checklist from the project root. Never record or display the real API key in the results.
 
-## Automated verification record — 2026-07-21
+## Automated verification record — 2026-07-23
 
 | Evidence | Result |
 | --- | --- |
-| `tests.test_ai_service` | Pass — 3 tests |
-| `tests.test_core` | Pass — 41 tests |
-| `tests.test_storage` | Pass — 36 tests |
-| `tests.test_workflow` | Pass — 1 complete workflow test |
-| Complete test discovery | Pass — 81 tests |
+| `tests.test_ai_service` | Pass — 6 tests |
+| `tests.test_core` | Pass — 79 tests |
+| `tests.test_storage` | Pass — 41 tests |
+| `tests.test_workflow` | Pass — 1 complete scheduled workflow test |
+| Complete test discovery | Pass — 127 tests |
 | Python compilation | Pass |
 | Source and Markdown whitespace | Pass |
 | Production-layer boundaries | Pass |
 | Approved dependency list | Pass — `streamlit` and `google-genai` only |
 | Real API-key pattern scan | Pass — no key found |
 | Database and `.env` artifact scan | Pass — none found in the reviewed files |
-| Future-feature implementation scan | Pass — no non-goal implementation found |
+| Scope scan | Pass — no non-goal or withdrawn Upcoming-task implementation found |
 
 The automated review was performed in a scratch copy without Git metadata. The `git diff --check`, ignored-file, and tracked-file results must therefore be recorded from the student's repository. Browser behavior, live AI behavior, restart behavior, and demonstration time also require manual results below.
 
@@ -25,7 +25,7 @@ The automated review was performed in a scratch copy without Git metadata. The `
 
 - [x] Create and activate `.venv` by following `README.md`.
 - [x] Install `requirements.txt` without errors.
-- [x] Run the complete automated suite and record the result: 81 passed
+- [x] Run the complete automated suite in the reviewed scratch copy: 127 passed
 - [x] Run `compileall` successfully.
 - [x] Run `git diff --check` without whitespace errors.
 - [x] Confirm the database and secret files are not staged by Git.
@@ -86,12 +86,64 @@ The automated review was performed in a scratch copy without Git metadata. The `
 - [x] Start a timer and demonstrate two profiles, one group, one membership addition, one assigned task, assignee selection, and task completion.
 - [x] Complete the workflow within two minutes. Recorded time: Two minutes or less, confirmed by tester
 
+## 8. Calendar and priority enhancement
+
+- [x] Create tasks with past, current, and future due dates.
+- [x] Create tasks at Low, Medium, and High priority; confirm Medium is the default.
+- [x] Confirm every task-list entry shows a readable due date and priority text.
+- [x] Confirm an incomplete past task shows `Overdue`.
+- [x] Confirm an incomplete task due today shows `Due today`.
+- [x] Confirm future and completed tasks show neither date-state label.
+- [x] Switch between Task list and Calendar views.
+- [x] Confirm incomplete and completed tasks appear on the correct calendar dates.
+- [x] Confirm each calendar entry shows title, priority, assignee, and status.
+- [x] Confirm an empty month keeps the calendar visible and shows an empty-month message.
+- [x] Navigate to the previous and next months, including December to January.
+- [x] Confirm navigation does not create, edit, complete, or delete a task.
+- [x] Confirm changing profile or group resets the calendar to the current month.
+- [x] Confirm restarting TaskHub resets the calendar to the current month.
+- [x] Copy `data/taskhub.db`, initialize only the copy, and confirm profiles, groups, memberships, tasks, statuses, due dates, and priorities remain intact. Counts before and after: 4 users, 3 groups, 5 memberships, and 8 tasks; tasks missing schedules: 0.
+- [x] Run the final calendar-enhancement suite and project checks in the student repository.
+
+## 9. Smart-priority and interface enhancement
+
+- [x] Confirm AI priority recommendation requires an explicit button press.
+- [x] Accept one recommendation and override another before task creation.
+- [x] Confirm recommendation failure preserves normal manual task creation.
+- [x] Confirm the AI request excludes usernames, groups, assignees, credentials, other tasks, and task history.
+- [x] Confirm dashboard totals, due-soon count, and progress for empty, partial, and complete groups.
+- [x] Confirm High, Medium, Low, overdue, and due-today text indicators.
+- [x] Confirm every status/ownership filter, priority filter, and sort option.
+- [x] Confirm no-match filtering, user/group resets, and group isolation.
+- [x] Confirm bordered task cards show every required field and only authorized completion controls.
+- [x] Confirm all required success, valid-empty, and controlled error messages.
+- [x] Confirm Task list is the default detailed view and the withdrawn Upcoming tasks section is absent.
+- [x] Make one live AI priority recommendation in the final local build without recording the API key.
+- [x] Run the final 127-test suite and compilation check in the student repository.
+- [x] Run `git diff --check` and confirm `.env` and `data/*.db` remain ignored and untracked.
+
+## 10. On-demand creation interface
+
+- [x] Confirm profile, group, and task creation fields are hidden initially.
+- [x] Open `Create profile`; verify username, AI suggestion, and `Save profile`.
+- [x] Confirm profile validation errors and a successful save still work.
+- [x] Select a user, open `Create group`, and verify `Save group` and validation.
+- [x] Select a group, open `Create task`, and verify every task field, AI priority action, due-date calendar, and `Save task`.
+- [x] Confirm unavailable prerequisites show guidance instead of an unusable form.
+- [x] Confirm current-user and group selection, members, dashboard, Task list, filters, cards, and Calendar remain usable without opening a creation form.
+- [x] Restart TaskHub and confirm saved profiles, groups, memberships, and tasks remain.
+
 ## Result
 
-- Date: 2026-07-21
+- Date: 2026-07-23
 - Tester: Student confirmation with automated review
 - Automated tests passed: Yes
 - Manual checklist passed: Yes
-- Live AI check passed: Yes
+- Live AI username check passed: Yes
+- Final live AI priority check passed: Yes
 - Two-minute demonstration passed: Yes
+- Calendar enhancement passed: Yes
+- Smart-priority interface checks passed: Yes
+- On-demand creation interface checks passed: Yes
+- Final local Git and 127-test checks passed: Yes
 - Notes or unresolved failures: None

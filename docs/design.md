@@ -161,15 +161,15 @@ Only functions that are required by an implemented core action should be added. 
 
 ### 4.4 `taskhub/ai_service.py`
 
-**Responsibility:** Make the isolated Google AI username request.
+**Responsibility:** Make isolated Google AI username-suggestion and task-priority-recommendation requests.
 
-**Main functions:** One function that requests and returns one raw username suggestion.
+**Main functions:** One function that requests and returns one raw username suggestion, plus one function that requests and returns one raw task-priority recommendation.
 
-**Inputs:** A fixed username-only prompt and API configuration read from the local environment.
+**Inputs:** Fixed request instructions, the approved validated priority-request fields when applicable, and API configuration read from the local environment.
 
-**Outputs:** Raw suggestion text or a controlled AI-unavailable error.
+**Outputs:** Raw suggestion or recommendation text, or a controlled AI-unavailable error.
 
-**Boundary:** This file must not receive a password, access SQLite, validate uniqueness, or create a profile.
+**Boundary:** This file must not receive a password, username, group name, assignee data, other tasks, or task history; access SQLite; validate business rules; or create or update application data.
 
 ## 5. Data model
 
@@ -283,6 +283,28 @@ Existing databases are upgraded in a transaction without deleting or recreating 
 
 Calendar month selection is temporary Streamlit session state. It begins at the current local month after application restart and resets when the current user or selected group changes. Navigation does not write to SQLite.
 
+### 6.4 Approved smart-priority and dashboard design
+
+The smart-priority enhancement keeps the existing four-component architecture and requires no storage migration or new dependency.
+
+- `taskhub/core.py` calculates baseline priority, validates parsed AI recommendations, calculates group metrics and completion percentage, and filters and sorts task collections. Date-dependent helpers receive a supplied local date for deterministic tests.
+- `taskhub/ai_service.py` sends one explicit priority-recommendation request using only validated title, description, today, due date, baseline priority, and fixed response instructions. It returns raw response text and converts configuration or provider failures into the existing controlled AI-unavailable error pattern.
+- `app.py` owns the recommendation button and temporary recommendation snapshot, renders metrics and progress, maintains filters and sorting state, and displays task cards. It continues to call core functions rather than repeat calculations or permissions.
+- `taskhub/storage.py` remains unchanged because due date and priority already persist and every new value is derived or session-only.
+
+The existing linear Streamlit workflow is retained. The enhancement does not require a sidebar or full tab redesign. AI output uses exactly two nonblank plain-text lines: lowercase priority first and a reason of at most 120 characters second. Relevant task-input changes clear a recommendation without making another request. Task list is the default detailed view. Filters default to all tasks and all priorities, sorting defaults to earliest due date, and these controls reset when the selected user or group changes. The formerly proposed separate Upcoming tasks section is withdrawn.
+
+### 6.5 Approved on-demand creation interface
+
+`app.py` uses native Streamlit popovers for profile and group creation and a
+collapsed expander for task creation. The task expander allows the due-date
+calendar overlay to work reliably. Each disclosure control coordinates the
+same existing core, storage, and AI functions; it does not reproduce their
+rules. The controls are labeled `Create profile`, `Create group`, and `Create
+task`. Final writes use distinct `Save` buttons inside them. Selection and
+display controls remain outside so returning users can reach their saved work
+without opening a creation form.
+
 ## 7. Error-handling strategy
 
 1. Validate lengths, whitespace, required values, uniqueness, membership, and permissions before saving.
@@ -356,6 +378,7 @@ Current-user selection is primarily interface-session behavior. Its missing-prof
 - A controlled raw suggestion response can be returned.
 - A missing API key produces an AI-unavailable error.
 - A simulated connection or service failure produces an AI-unavailable error.
+- A priority request sends only approved fields and returns controlled raw text.
 
 The real AI call will be replaced with predetermined responses during automated tests. This controlled replacement is called a **mock** and prevents tests from depending on the internet or unpredictable AI output.
 
@@ -369,7 +392,7 @@ The manual checklist will verify:
 - The four required task fields.
 - The `Assigned to you` label.
 - Safe interface errors.
-- One live AI username suggestion.
+- One live AI username suggestion and one live task-priority recommendation.
 - Core functions while AI access is unavailable.
 - The complete two-user workflow within two minutes.
 
@@ -436,6 +459,13 @@ The local database file and API key configuration must be excluded from version 
 | REQ-07 Complete task | `core.py`, `storage.py`, task interface in `app.py` | `test_core.py`, `test_storage.py`, `test_workflow.py` |
 | REQ-08 Retain data | `storage.py` | `test_storage.py`, `test_workflow.py` |
 | REQ-09 AI username suggestion | `ai_service.py`, `core.py`, AI interface in `app.py` | `test_ai_service.py`, `test_core.py`, manual live check |
+| REQ-SPUI-01 Baseline priority | `core.py` | `test_core.py` |
+| REQ-SPUI-02–04 AI priority recommendation | `ai_service.py`, `core.py`, `app.py` | `test_ai_service.py`, `test_core.py`, manual live check |
+| REQ-SPUI-05–06 Dashboard and progress | `core.py`, `app.py` | `test_core.py`, manual checklist |
+| REQ-SPUI-07 Priority and overdue indicators | `core.py`, `app.py` | `test_core.py`, manual checklist |
+| REQ-SPUI-08–09 Filter and sort tasks | `core.py`, `app.py` | `test_core.py`, manual checklist |
+| REQ-SPUI-10 Withdrawn upcoming-task section | None | Scope-revision review |
+| REQ-SPUI-11–12 Task cards and feedback | `app.py` | Manual checklist |
 
 ## 12. Technical risks
 
@@ -445,7 +475,7 @@ The local database file and API key configuration must be excluded from version 
 | SQL and Streamlit are both new. | Development may exceed the available time. | Finish and test core and storage behavior before interface polish. |
 | A group and creator membership are two writes. | Partial saving could leave inconsistent data. | Use one transaction. |
 | No authentication exists. | A person can select and act as another profile. | State this approved limitation clearly. |
-| AI output or availability is unpredictable. | The username suggestion may fail. | Isolate, validate, mock in tests, and display a controlled error. |
+| AI output or availability is unpredictable. | A username suggestion or priority recommendation may fail. | Isolate, validate, mock in tests, preserve manual workflows, and display a controlled error. |
 | The database becomes unreadable. | Saved records cannot be used. | Stop storage actions and show an error without overwriting data. |
 | Rules are copied into `app.py`. | Automated tests may not cover actual behavior. | Keep all validation and permission decisions in `core.py`. |
 

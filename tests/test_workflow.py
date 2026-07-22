@@ -5,12 +5,18 @@ from pathlib import Path
 
 from taskhub.core import (
     add_group_member_by_username,
+    calculate_completion_progress,
+    calculate_group_task_metrics,
     complete_assigned_task,
     create_assigned_task,
     create_group,
     create_profile,
+    filter_tasks,
+    format_priority_display,
     get_group_tasks,
+    get_group_tasks_for_month,
     list_user_groups,
+    sort_tasks,
 )
 from taskhub.storage import (
     get_task_by_id,
@@ -54,6 +60,8 @@ class TestCompleteWorkflow(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             int(jordan["user_id"]),
+            "2026-07-25",
+            "high",
         )
 
         with self.assertRaisesRegex(PermissionError, "assignee"):
@@ -75,9 +83,60 @@ class TestCompleteWorkflow(unittest.TestCase):
             self.database_path,
             int(group["group_id"]),
             current_user_id,
+            date(2026, 7, 25),
         )
 
         self.assertTrue(jordan_tasks[0]["assigned_to_current_user"])
+        self.assertEqual(jordan_tasks[0]["due_date"], "2026-07-25")
+        self.assertEqual(jordan_tasks[0]["priority"], "high")
+        self.assertEqual(jordan_tasks[0]["date_state"], "Due today")
+        self.assertEqual(
+            calculate_group_task_metrics(
+                jordan_tasks,
+                date(2026, 7, 25),
+            ),
+            {
+                "total": 1,
+                "incomplete": 1,
+                "complete": 0,
+                "due_soon": 1,
+            },
+        )
+        self.assertEqual(
+            calculate_completion_progress(jordan_tasks),
+            {
+                "completed": 0,
+                "total": 1,
+                "ratio": 0.0,
+                "percentage": 0.0,
+            },
+        )
+        filtered_tasks = filter_tasks(
+            jordan_tasks,
+            "Assigned to me",
+            "High",
+        )
+        self.assertEqual(
+            [filtered_task["task_id"] for filtered_task in filtered_tasks],
+            [task["task_id"]],
+        )
+        self.assertEqual(
+            sort_tasks(filtered_tasks, "Due date"),
+            filtered_tasks,
+        )
+        self.assertEqual(format_priority_display("high"), "🔴 High")
+        calendar_tasks = get_group_tasks_for_month(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            2026,
+            7,
+            date(2026, 7, 25),
+        )
+        self.assertEqual(
+            [calendar_task["task_id"] for calendar_task in calendar_tasks],
+            [task["task_id"]],
+        )
         self.assertEqual(
             complete_assigned_task(
                 self.database_path,
@@ -85,6 +144,29 @@ class TestCompleteWorkflow(unittest.TestCase):
                 current_user_id,
             ),
             "Task marked complete.",
+        )
+        completed_tasks = get_group_tasks(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            date(2026, 7, 25),
+        )
+        self.assertEqual(completed_tasks[0]["date_state"], "")
+        self.assertEqual(
+            calculate_group_task_metrics(
+                completed_tasks,
+                date(2026, 7, 25),
+            ),
+            {
+                "total": 1,
+                "incomplete": 0,
+                "complete": 1,
+                "due_soon": 0,
+            },
+        )
+        self.assertEqual(
+            calculate_completion_progress(completed_tasks)["percentage"],
+            100.0,
         )
 
         initialize_storage(self.database_path)
@@ -122,10 +204,23 @@ class TestCompleteWorkflow(unittest.TestCase):
                 "description": "Wash and dry the dishes",
                 "assignee_id": jordan["user_id"],
                 "status": "complete",
-                "due_date": date.today().isoformat(),
-                "priority": "medium",
+                "due_date": "2026-07-25",
+                "priority": "high",
             },
         )
+        reopened_calendar_tasks = get_group_tasks_for_month(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            2026,
+            7,
+            date(2026, 7, 26),
+        )
+        self.assertEqual(len(reopened_calendar_tasks), 1)
+        self.assertEqual(reopened_calendar_tasks[0]["status"], "complete")
+        self.assertEqual(reopened_calendar_tasks[0]["due_date"], "2026-07-25")
+        self.assertEqual(reopened_calendar_tasks[0]["priority"], "high")
+        self.assertEqual(reopened_calendar_tasks[0]["date_state"], "")
 
 
 if __name__ == "__main__":
