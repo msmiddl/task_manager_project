@@ -220,12 +220,30 @@ def create_assigned_task(
     }
 
 
+def calculate_task_date_state(
+    due_date: str,
+    status: str,
+    current_date: date,
+) -> str:
+    """Return the temporary display label for one task's due date."""
+    if status == "complete":
+        return ""
+
+    parsed_due_date = date.fromisoformat(due_date)
+    if parsed_due_date < current_date:
+        return "Overdue"
+    if parsed_due_date == current_date:
+        return "Due today"
+    return ""
+
+
 def get_group_tasks(
     database_path: DatabasePath,
     group_id: int,
     current_user_id: int,
+    current_date: date | None = None,
 ) -> list[dict[str, int | str | bool]]:
-    """Return accessible group tasks with current-user markers."""
+    """Return accessible group tasks with temporary display markers."""
     if not storage.is_group_member(
         database_path,
         group_id,
@@ -235,6 +253,7 @@ def get_group_tasks(
             "Only a group member can view that group's tasks."
         )
 
+    reference_date = current_date or date.today()
     tasks = storage.list_tasks_for_group(database_path, group_id)
     return [
         {
@@ -242,9 +261,38 @@ def get_group_tasks(
             "assigned_to_current_user": (
                 task["assignee_id"] == current_user_id
             ),
+            "date_state": calculate_task_date_state(
+                str(task["due_date"]),
+                str(task["status"]),
+                reference_date,
+            ),
         }
         for task in tasks
     ]
+
+
+def get_group_tasks_for_month(
+    database_path: DatabasePath,
+    group_id: int,
+    current_user_id: int,
+    year: int,
+    month: int,
+    current_date: date | None = None,
+) -> list[dict[str, int | str | bool]]:
+    """Return accessible group tasks due in one calendar month."""
+    tasks = get_group_tasks(
+        database_path,
+        group_id,
+        current_user_id,
+        current_date,
+    )
+    month_tasks = []
+    for task in tasks:
+        due_date = date.fromisoformat(str(task["due_date"]))
+        if due_date.year == year and due_date.month == month:
+            month_tasks.append(task)
+
+    return month_tasks
 
 
 def get_assigned_incomplete_tasks(

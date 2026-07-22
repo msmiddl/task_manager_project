@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from taskhub.core import (
@@ -9,6 +10,7 @@ from taskhub.core import (
     create_group,
     create_profile,
     get_group_tasks,
+    get_group_tasks_for_month,
     list_user_groups,
 )
 from taskhub.storage import (
@@ -76,9 +78,25 @@ class TestCompleteWorkflow(unittest.TestCase):
             self.database_path,
             int(group["group_id"]),
             current_user_id,
+            date(2026, 7, 25),
         )
 
         self.assertTrue(jordan_tasks[0]["assigned_to_current_user"])
+        self.assertEqual(jordan_tasks[0]["due_date"], "2026-07-25")
+        self.assertEqual(jordan_tasks[0]["priority"], "high")
+        self.assertEqual(jordan_tasks[0]["date_state"], "Due today")
+        calendar_tasks = get_group_tasks_for_month(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            2026,
+            7,
+            date(2026, 7, 25),
+        )
+        self.assertEqual(
+            [calendar_task["task_id"] for calendar_task in calendar_tasks],
+            [task["task_id"]],
+        )
         self.assertEqual(
             complete_assigned_task(
                 self.database_path,
@@ -87,6 +105,13 @@ class TestCompleteWorkflow(unittest.TestCase):
             ),
             "Task marked complete.",
         )
+        completed_tasks = get_group_tasks(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            date(2026, 7, 25),
+        )
+        self.assertEqual(completed_tasks[0]["date_state"], "")
 
         initialize_storage(self.database_path)
 
@@ -127,6 +152,19 @@ class TestCompleteWorkflow(unittest.TestCase):
                 "priority": "high",
             },
         )
+        reopened_calendar_tasks = get_group_tasks_for_month(
+            self.database_path,
+            int(group["group_id"]),
+            current_user_id,
+            2026,
+            7,
+            date(2026, 7, 26),
+        )
+        self.assertEqual(len(reopened_calendar_tasks), 1)
+        self.assertEqual(reopened_calendar_tasks[0]["status"], "complete")
+        self.assertEqual(reopened_calendar_tasks[0]["due_date"], "2026-07-25")
+        self.assertEqual(reopened_calendar_tasks[0]["priority"], "high")
+        self.assertEqual(reopened_calendar_tasks[0]["date_state"], "")
 
 
 if __name__ == "__main__":

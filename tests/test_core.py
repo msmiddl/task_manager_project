@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from taskhub.core import (
@@ -9,6 +10,7 @@ from taskhub.core import (
     create_assigned_task,
     create_profile,
     get_group_tasks,
+    get_group_tasks_for_month,
     get_assigned_incomplete_tasks,
     list_user_groups,
     validate_group_name,
@@ -598,6 +600,277 @@ class TestAssignedTaskCore(unittest.TestCase):
         self.assertFalse(tasks[1]["assigned_to_current_user"])
         self.assertEqual(tasks[0]["assignee_username"], "Alex")
         self.assertEqual(tasks[1]["assignee_username"], "Jordan")
+
+    def test_group_tasks_calculate_incomplete_task_date_states(self):
+        schedules = (
+            ("Past task", "2026-07-20", "Overdue"),
+            ("Today task", "2026-07-21", "Due today"),
+            ("Future task", "2026-07-22", ""),
+        )
+        for title, due_date, expected_state in schedules:
+            with self.subTest(title=title):
+                create_assigned_task(
+                    self.database_path,
+                    self.group["group_id"],
+                    self.alex["user_id"],
+                    title,
+                    "Check its calculated date state",
+                    self.alex["user_id"],
+                    due_date,
+                    "medium",
+                )
+
+        tasks = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 21),
+        )
+
+        self.assertEqual(
+            [task["date_state"] for task in tasks],
+            [state for _, _, state in schedules],
+        )
+
+    def test_completed_tasks_have_no_date_state(self):
+        for title, due_date in (
+            ("Past complete", "2026-07-20"),
+            ("Today complete", "2026-07-21"),
+        ):
+            task = create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                title,
+                "Complete before checking the date state",
+                self.alex["user_id"],
+                due_date,
+                "high",
+            )
+            complete_assigned_task(
+                self.database_path,
+                task["task_id"],
+                self.alex["user_id"],
+            )
+
+        tasks = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 21),
+        )
+
+        self.assertEqual(
+            [task["date_state"] for task in tasks],
+            ["", ""],
+        )
+
+    def test_date_state_is_recalculated_for_the_supplied_date(self):
+        create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Boundary task",
+            "Recalculate without changing storage",
+            self.alex["user_id"],
+            "2026-07-22",
+            "low",
+        )
+
+        due_today = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 22),
+        )
+        overdue = get_group_tasks(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            date(2026, 7, 23),
+        )
+
+        self.assertEqual(due_today[0]["date_state"], "Due today")
+        self.assertEqual(overdue[0]["date_state"], "Overdue")
+        self.assertNotIn(
+            "date_state",
+            get_task_by_id(self.database_path, due_today[0]["task_id"]),
+        )
+
+    def test_empty_group_has_no_calculated_task_states(self):
+        self.assertEqual(
+            get_group_tasks(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                date(2026, 7, 21),
+            ),
+            [],
+        )
+
+    def test_calendar_month_returns_tasks_with_required_details(self):
+        incomplete_task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Buy soap",
+            "Buy dish soap",
+            self.alex["user_id"],
+            "2026-07-10",
+            "low",
+        )
+        completed_task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Wash dishes",
+            "Wash and dry the dishes",
+            self.jordan["user_id"],
+            "2026-07-25",
+            "high",
+        )
+        complete_assigned_task(
+            self.database_path,
+            completed_task["task_id"],
+            self.jordan["user_id"],
+        )
+
+        tasks = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            7,
+            date(2026, 7, 15),
+        )
+
+        self.assertEqual(
+            [task["task_id"] for task in tasks],
+            [incomplete_task["task_id"], completed_task["task_id"]],
+        )
+        self.assertEqual(tasks[0]["priority"], "low")
+        self.assertEqual(tasks[0]["assignee_username"], "Alex")
+        self.assertEqual(tasks[0]["status"], "incomplete")
+        self.assertEqual(tasks[1]["status"], "complete")
+
+    def test_calendar_month_observes_year_and_month_boundaries(self):
+        for title, due_date in (
+            ("Year end", "2026-12-31"),
+            ("Year start", "2027-01-01"),
+            ("Leap day", "2028-02-29"),
+        ):
+            create_assigned_task(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                title,
+                "Check a calendar boundary",
+                self.alex["user_id"],
+                due_date,
+                "medium",
+            )
+
+        december = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            12,
+            date(2026, 12, 1),
+        )
+        january = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2027,
+            1,
+            date(2027, 1, 1),
+        )
+        leap_february = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2028,
+            2,
+            date(2028, 2, 1),
+        )
+
+        self.assertEqual([task["title"] for task in december], ["Year end"])
+        self.assertEqual([task["title"] for task in january], ["Year start"])
+        self.assertEqual(
+            [task["title"] for task in leap_february],
+            ["Leap day"],
+        )
+
+    def test_calendar_month_returns_empty_list_when_no_tasks_are_due(self):
+        self.assertEqual(
+            get_group_tasks_for_month(
+                self.database_path,
+                self.group["group_id"],
+                self.alex["user_id"],
+                2026,
+                7,
+                date(2026, 7, 1),
+            ),
+            [],
+        )
+
+    def test_calendar_month_is_group_scoped_and_read_only(self):
+        task = create_assigned_task(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            "Roommate task",
+            "This belongs to Roommates",
+            self.alex["user_id"],
+            "2026-07-10",
+            "medium",
+        )
+        other_group = create_group(
+            self.database_path,
+            "Class Project",
+            self.alex["user_id"],
+        )
+        create_assigned_task(
+            self.database_path,
+            other_group["group_id"],
+            self.alex["user_id"],
+            "Class task",
+            "This belongs to Class Project",
+            self.alex["user_id"],
+            "2026-07-11",
+            "high",
+        )
+        saved_before = get_task_by_id(
+            self.database_path,
+            task["task_id"],
+        )
+
+        tasks = get_group_tasks_for_month(
+            self.database_path,
+            self.group["group_id"],
+            self.alex["user_id"],
+            2026,
+            7,
+            date(2026, 7, 1),
+        )
+
+        self.assertEqual([item["title"] for item in tasks], ["Roommate task"])
+        self.assertEqual(
+            get_task_by_id(self.database_path, task["task_id"]),
+            saved_before,
+        )
+
+    def test_nonmember_cannot_retrieve_calendar_month(self):
+        with self.assertRaisesRegex(PermissionError, "group member"):
+            get_group_tasks_for_month(
+                self.database_path,
+                self.group["group_id"],
+                self.taylor["user_id"],
+                2026,
+                7,
+                date(2026, 7, 1),
+            )
 
     def test_nonmember_cannot_retrieve_group_tasks(self):
         with self.assertRaisesRegex(PermissionError, "group member"):

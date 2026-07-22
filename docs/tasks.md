@@ -314,6 +314,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T32 — Add scheduling inputs to task creation
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-01, CAL-02
 - **Description:** Add a required Streamlit date input and a Low/Medium/High priority selector defaulting to Medium. Submit normalized values through core and display safe errors without adding another interface or dependency.
 - **Files expected to change:** `app.py`
@@ -323,6 +324,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T33 — Retrieve scheduling data and calculate date states
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-03, CAL-04
 - **Description:** Include due date and priority in selected-group task results and add deterministic core calculation of `Overdue`, `Due today`, or no date label using a supplied local date. Completed tasks receive no date-state label.
 - **Files expected to change:** `taskhub/storage.py`, `taskhub/core.py`, `tests/test_storage.py`, `tests/test_core.py`
@@ -332,6 +334,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T34 — Display enhanced task-list fields and labels
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-03, CAL-04
 - **Description:** Display a consistent human-readable due date, visible priority text, and overdue/due-today text in the existing task list. Preserve current empty, assignment, completion, and error behavior.
 - **Files expected to change:** `app.py`
@@ -341,6 +344,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T35 — Filter selected-group tasks by calendar month
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-05
 - **Description:** Add a simple core function that returns selected-group tasks for a supplied year and month while reusing group-access rules. Do not mutate storage or add cross-group filtering.
 - **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
@@ -350,6 +354,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T36 — Add the internal monthly calendar and navigation
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-05, CAL-06
 - **Description:** Add Task list/Calendar view selection, a monthly grid built with standard-library calendar data, task details on due dates, empty-month messaging, and previous/next navigation in session state. Reset calendar state when user or group changes.
 - **Files expected to change:** `app.py`
@@ -359,6 +364,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T37 — Complete calendar workflow, documentation, and final checks
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-01, CAL-02, CAL-03, CAL-04, CAL-05, CAL-06, CAL-07
 - **Description:** Extend the workflow test through dated prioritized creation, display, completion, and reopen; update README and the manual checklist; test migration on a copy of an existing database; and perform final requirement review.
 - **Files expected to change:** `tests/test_workflow.py`, `README.md`, `docs/manual-test-checklist.md`

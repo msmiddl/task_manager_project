@@ -1,3 +1,5 @@
+import calendar
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
@@ -95,6 +97,11 @@ try:
                 st.session_state.pop("task_title", None)
                 st.session_state.pop("task_description", None)
                 st.session_state.pop("task_assignee_selector", None)
+                st.session_state.pop("task_due_date", None)
+                st.session_state.pop("task_priority", None)
+                st.session_state.pop("task_view", None)
+                st.session_state.pop("calendar_year", None)
+                st.session_state.pop("calendar_month", None)
             st.session_state["current_user_id"] = selected_user_id
             active_user_id = selected_user_id
             selected_profile = profile_by_id[selected_user_id]
@@ -172,6 +179,11 @@ try:
                             "task_assignee_selector",
                             None,
                         )
+                        st.session_state.pop("task_due_date", None)
+                        st.session_state.pop("task_priority", None)
+                        st.session_state.pop("task_view", None)
+                        st.session_state.pop("calendar_year", None)
+                        st.session_state.pop("calendar_month", None)
                     st.session_state["selected_group_id"] = (
                         chosen_group_id
                     )
@@ -244,6 +256,17 @@ try:
             placeholder="Choose an assignee",
             key="task_assignee_selector",
         )
+        selected_due_date = st.date_input(
+            "Due date",
+            value=None,
+            key="task_due_date",
+        )
+        selected_priority = st.selectbox(
+            "Priority",
+            options=("Low", "Medium", "High"),
+            index=1,
+            key="task_priority",
+        )
 
         if st.button("Create task"):
             try:
@@ -254,6 +277,12 @@ try:
                     task_title,
                     task_description,
                     selected_assignee_id,
+                    (
+                        selected_due_date.isoformat()
+                        if selected_due_date is not None
+                        else None
+                    ),
+                    selected_priority.lower(),
                 )
                 st.success(
                     f"Created incomplete task: {created_task['title']}"
@@ -261,7 +290,7 @@ try:
             except USER_FACING_ERRORS as error:
                 st.error(str(error))
 
-    st.subheader("Group tasks")
+    st.subheader("Group tasks and calendar")
 
     if active_group is None:
         st.info("Select a group to view its tasks.")
@@ -276,56 +305,173 @@ try:
             elif completion_message is not None:
                 st.info(completion_message)
 
-            group_tasks = core.get_group_tasks(
-                DATABASE_PATH,
-                int(active_group["group_id"]),
-                int(active_user_id),
+            task_view = st.radio(
+                "View",
+                options=("Task list", "Calendar"),
+                horizontal=True,
+                key="task_view",
             )
 
-            if not group_tasks:
-                st.info("The selected group has no tasks.")
+            if task_view == "Task list":
+                group_tasks = core.get_group_tasks(
+                    DATABASE_PATH,
+                    int(active_group["group_id"]),
+                    int(active_user_id),
+                )
+
+                if not group_tasks:
+                    st.info("The selected group has no tasks.")
+                else:
+                    assigned_incomplete_tasks = [
+                        task
+                        for task in group_tasks
+                        if task["assigned_to_current_user"]
+                        and task["status"] == "incomplete"
+                    ]
+                    if not assigned_incomplete_tasks:
+                        st.info(
+                            "The current user has no assigned incomplete "
+                            "tasks."
+                        )
+
+                    for task in group_tasks:
+                        due_date = date.fromisoformat(
+                            str(task["due_date"])
+                        )
+                        readable_due_date = (
+                            f"{due_date.strftime('%B')} "
+                            f"{due_date.day}, {due_date.year}"
+                        )
+                        st.write(f"Title: {task['title']}")
+                        st.write(f"Description: {task['description']}")
+                        st.write(
+                            f"Assignee: {task['assignee_username']}"
+                        )
+                        st.write(f"Status: {task['status']}")
+                        st.write(f"Due date: {readable_due_date}")
+                        st.write(
+                            "Priority: "
+                            f"{str(task['priority']).capitalize()}"
+                        )
+                        if task["date_state"]:
+                            st.write(task["date_state"])
+                        if task["assigned_to_current_user"]:
+                            st.write("Assigned to you")
+                        if (
+                            task["assigned_to_current_user"]
+                            and task["status"] == "incomplete"
+                        ):
+                            if st.button(
+                                "Mark complete",
+                                key=f"complete_task_{task['task_id']}",
+                            ):
+                                try:
+                                    message = core.complete_assigned_task(
+                                        DATABASE_PATH,
+                                        int(task["task_id"]),
+                                        int(active_user_id),
+                                    )
+                                    st.session_state[
+                                        "task_completion_message"
+                                    ] = message
+                                    st.rerun()
+                                except USER_FACING_ERRORS as error:
+                                    st.error(str(error))
+                        st.divider()
             else:
-                assigned_incomplete_tasks = [
-                    task
-                    for task in group_tasks
-                    if task["assigned_to_current_user"]
-                    and task["status"] == "incomplete"
-                ]
-                if not assigned_incomplete_tasks:
-                    st.info(
-                        "The current user has no assigned incomplete tasks."
+                today = date.today()
+                if "calendar_year" not in st.session_state:
+                    st.session_state["calendar_year"] = today.year
+                if "calendar_month" not in st.session_state:
+                    st.session_state["calendar_month"] = today.month
+
+                calendar_year = int(st.session_state["calendar_year"])
+                calendar_month = int(st.session_state["calendar_month"])
+
+                previous_column, heading_column, next_column = st.columns(
+                    [1, 2, 1]
+                )
+                with previous_column:
+                    if st.button("Previous month"):
+                        if calendar_month == 1:
+                            st.session_state["calendar_year"] = (
+                                calendar_year - 1
+                            )
+                            st.session_state["calendar_month"] = 12
+                        else:
+                            st.session_state["calendar_month"] = (
+                                calendar_month - 1
+                            )
+                        st.rerun()
+                with heading_column:
+                    st.subheader(
+                        f"{calendar.month_name[calendar_month]} "
+                        f"{calendar_year}"
+                    )
+                with next_column:
+                    if st.button("Next month"):
+                        if calendar_month == 12:
+                            st.session_state["calendar_year"] = (
+                                calendar_year + 1
+                            )
+                            st.session_state["calendar_month"] = 1
+                        else:
+                            st.session_state["calendar_month"] = (
+                                calendar_month + 1
+                            )
+                        st.rerun()
+
+                calendar_tasks = core.get_group_tasks_for_month(
+                    DATABASE_PATH,
+                    int(active_group["group_id"]),
+                    int(active_user_id),
+                    calendar_year,
+                    calendar_month,
+                    today,
+                )
+                tasks_by_day = {}
+                for task in calendar_tasks:
+                    task_due_date = date.fromisoformat(
+                        str(task["due_date"])
+                    )
+                    tasks_by_day.setdefault(task_due_date.day, []).append(
+                        task
                     )
 
-                for task in group_tasks:
-                    st.write(f"Title: {task['title']}")
-                    st.write(f"Description: {task['description']}")
-                    st.write(
-                        f"Assignee: {task['assignee_username']}"
-                    )
-                    st.write(f"Status: {task['status']}")
-                    if task["assigned_to_current_user"]:
-                        st.write("Assigned to you")
-                    if (
-                        task["assigned_to_current_user"]
-                        and task["status"] == "incomplete"
-                    ):
-                        if st.button(
-                            "Mark complete",
-                            key=f"complete_task_{task['task_id']}",
-                        ):
-                            try:
-                                message = core.complete_assigned_task(
-                                    DATABASE_PATH,
-                                    int(task["task_id"]),
-                                    int(active_user_id),
+                weekday_columns = st.columns(7)
+                for column, weekday_name in zip(
+                    weekday_columns,
+                    calendar.day_abbr,
+                ):
+                    column.write(f"**{weekday_name}**")
+
+                for week in calendar.monthcalendar(
+                    calendar_year,
+                    calendar_month,
+                ):
+                    day_columns = st.columns(7)
+                    for column, day_number in zip(day_columns, week):
+                        with column:
+                            if day_number == 0:
+                                st.write("")
+                                continue
+
+                            st.write(f"**{day_number}**")
+                            for task in tasks_by_day.get(day_number, []):
+                                st.write(f"Title: {task['title']}")
+                                st.write(
+                                    "Priority: "
+                                    f"{str(task['priority']).capitalize()}"
                                 )
-                                st.session_state[
-                                    "task_completion_message"
-                                ] = message
-                                st.rerun()
-                            except USER_FACING_ERRORS as error:
-                                st.error(str(error))
-                    st.divider()
+                                st.write(
+                                    f"Assignee: "
+                                    f"{task['assignee_username']}"
+                                )
+                                st.write(f"Status: {task['status']}")
+                                st.divider()
+
+                if not calendar_tasks:
+                    st.info("There are no tasks due in this month.")
         except USER_FACING_ERRORS as error:
             st.error(str(error))
 except RuntimeError as error:
@@ -337,4 +483,9 @@ except RuntimeError as error:
     st.session_state.pop("task_title", None)
     st.session_state.pop("task_description", None)
     st.session_state.pop("task_assignee_selector", None)
+    st.session_state.pop("task_due_date", None)
+    st.session_state.pop("task_priority", None)
+    st.session_state.pop("task_view", None)
+    st.session_state.pop("calendar_year", None)
+    st.session_state.pop("calendar_month", None)
     st.error(str(error))
