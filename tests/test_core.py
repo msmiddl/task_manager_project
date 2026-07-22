@@ -13,6 +13,7 @@ from taskhub.core import (
     list_user_groups,
     validate_group_name,
     validate_ai_username_suggestion,
+    validate_task_schedule,
     validate_task_fields,
     validate_username,
 )
@@ -379,6 +380,75 @@ class TestAssignedTaskCore(unittest.TestCase):
         validate_task_fields("A", "B")
         validate_task_fields("A" * 20, "B" * 100)
 
+    def test_valid_due_dates_are_accepted(self):
+        for due_date in (
+            "2020-01-01",
+            "2026-07-21",
+            "2030-12-31",
+            "2028-02-29",
+        ):
+            with self.subTest(due_date=due_date):
+                validate_task_schedule(due_date, "medium")
+
+    def test_missing_due_date_is_rejected(self):
+        for due_date in (None, ""):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(ValueError, "due date.*required"):
+                    validate_task_schedule(due_date, "medium")
+
+    def test_invalid_due_dates_are_rejected(self):
+        for due_date in (
+            "2026-02-30",
+            "2026-2-3",
+            "07/25/2026",
+            "20260725",
+            "not-a-date",
+        ):
+            with self.subTest(due_date=due_date):
+                with self.assertRaisesRegex(ValueError, "invalid due date"):
+                    validate_task_schedule(due_date, "medium")
+
+    def test_approved_priorities_are_accepted(self):
+        for priority in ("low", "medium", "high"):
+            with self.subTest(priority=priority):
+                validate_task_schedule("2026-07-25", priority)
+
+    def test_missing_priority_is_rejected(self):
+        for priority in (None, ""):
+            with self.subTest(priority=priority):
+                with self.assertRaisesRegex(ValueError, "priority.*required"):
+                    validate_task_schedule("2026-07-25", priority)
+
+    def test_unsupported_priorities_are_rejected(self):
+        for priority in ("urgent", "Medium", "HIGH", " "):
+            with self.subTest(priority=priority):
+                with self.assertRaisesRegex(ValueError, "invalid priority"):
+                    validate_task_schedule("2026-07-25", priority)
+
+    def test_invalid_schedule_does_not_create_a_task(self):
+        invalid_schedules = (
+            (None, "medium", "due date"),
+            ("2026-07-25", None, "priority"),
+            ("2026-02-30", "medium", "due date"),
+            ("2026-07-25", "urgent", "priority"),
+        )
+
+        for due_date, priority, field_name in invalid_schedules:
+            with self.subTest(field=field_name):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    create_assigned_task(
+                        self.database_path,
+                        self.group["group_id"],
+                        self.alex["user_id"],
+                        "Wash dishes",
+                        "Wash and dry the dishes",
+                        self.jordan["user_id"],
+                        due_date,
+                        priority,
+                    )
+
+        self.assertIsNone(get_task_by_id(self.database_path, 1))
+
     def test_task_fields_over_maximum_are_rejected(self):
         invalid_fields = (
             ("A" * 21, "Description", "title"),
@@ -434,6 +504,8 @@ class TestAssignedTaskCore(unittest.TestCase):
                 "Wash dishes",
                 "Wash and dry the dishes",
                 self.taylor["user_id"],
+                "2026-07-25",
+                "medium",
             )
 
         self.assertIsNone(get_task_by_id(self.database_path, 1))
@@ -447,6 +519,8 @@ class TestAssignedTaskCore(unittest.TestCase):
                 "Wash dishes",
                 "Wash and dry the dishes",
                 self.jordan["user_id"],
+                "2026-07-25",
+                "medium",
             )
 
         self.assertIsNone(get_task_by_id(self.database_path, 1))
@@ -465,6 +539,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Buy soap",
             "Buy dish soap",
             self.taylor["user_id"],
+            "2026-07-25",
+            "low",
         )
 
         self.assertEqual(task["assignee_id"], self.taylor["user_id"])
@@ -478,6 +554,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "high",
         )
 
         self.assertEqual(task["group_id"], self.group["group_id"])
@@ -485,6 +563,8 @@ class TestAssignedTaskCore(unittest.TestCase):
         self.assertEqual(task["description"], "Wash and dry the dishes")
         self.assertEqual(task["assignee_id"], self.jordan["user_id"])
         self.assertEqual(task["status"], "incomplete")
+        self.assertEqual(task["due_date"], "2026-07-25")
+        self.assertEqual(task["priority"], "high")
 
     def test_group_tasks_mark_only_current_users_assignments(self):
         create_assigned_task(
@@ -494,6 +574,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Buy soap",
             "Buy dish soap",
             self.alex["user_id"],
+            "2026-07-24",
+            "medium",
         )
         create_assigned_task(
             self.database_path,
@@ -502,6 +584,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "high",
         )
 
         tasks = get_group_tasks(
@@ -531,6 +615,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         message = complete_assigned_task(
@@ -556,6 +642,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         with self.assertRaisesRegex(PermissionError, "assignee"):
@@ -594,6 +682,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Private task",
             "Only Taylor can access this",
             self.taylor["user_id"],
+            "2026-07-25",
+            "low",
         )
 
         with self.assertRaisesRegex(PermissionError, "access"):
@@ -619,6 +709,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
         complete_assigned_task(
             self.database_path,
@@ -642,6 +734,8 @@ class TestAssignedTaskCore(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             self.jordan["user_id"],
+            "2026-07-25",
+            "medium",
         )
 
         tasks = get_assigned_incomplete_tasks(

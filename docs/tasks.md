@@ -304,6 +304,7 @@ The first vertical slice implements one complete profile-creation path:
 
 ### T31 — Validate dated and prioritized task creation
 
+- **Status:** Complete
 - **Requirement IDs supported:** CAL-01, CAL-02
 - **Description:** Add core validation for required real ISO dates and lowercase priorities, then pass validated values through assigned-task creation. Allow past, current, future, and leap-day dates while rejecting missing or malformed values.
 - **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`

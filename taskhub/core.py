@@ -1,3 +1,5 @@
+from datetime import date
+
 from taskhub import storage
 from taskhub.storage import DatabasePath, UserRecord
 
@@ -140,6 +142,29 @@ def validate_task_fields(title: str, description: str) -> None:
         )
 
 
+def validate_task_schedule(
+    due_date: str | None,
+    priority: str | None,
+) -> None:
+    """Raise a clear error for invalid scheduling values."""
+    if due_date is None or due_date == "":
+        raise ValueError("A task due date is required.")
+
+    try:
+        parsed_due_date = date.fromisoformat(due_date)
+    except (TypeError, ValueError) as error:
+        raise ValueError("The task has an invalid due date.") from error
+
+    if parsed_due_date.isoformat() != due_date:
+        raise ValueError("The task has an invalid due date.")
+
+    if priority is None or priority == "":
+        raise ValueError("A task priority is required.")
+
+    if priority not in ("low", "medium", "high"):
+        raise ValueError("The task has an invalid priority.")
+
+
 def create_assigned_task(
     database_path: DatabasePath,
     group_id: int,
@@ -147,12 +172,16 @@ def create_assigned_task(
     title: str,
     description: str,
     assignee_id: int | None,
+    due_date: str | None = None,
+    priority: str | None = None,
 ) -> storage.TaskRecord:
     """Validate and save one task assigned to a group member."""
     validate_task_fields(title, description)
 
     if assignee_id is None:
         raise ValueError("A task assignee is required.")
+
+    validate_task_schedule(due_date, priority)
 
     if not storage.is_group_member(
         database_path,
@@ -176,6 +205,8 @@ def create_assigned_task(
         title,
         description,
         assignee_id,
+        due_date,
+        priority,
     )
     return {
         "task_id": task_id,
@@ -184,6 +215,8 @@ def create_assigned_task(
         "description": description,
         "assignee_id": assignee_id,
         "status": "incomplete",
+        "due_date": due_date,
+        "priority": priority,
     }
 
 

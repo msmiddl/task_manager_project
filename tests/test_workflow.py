@@ -1,6 +1,5 @@
 import tempfile
 import unittest
-from datetime import date
 from pathlib import Path
 
 from taskhub.core import (
@@ -54,6 +53,8 @@ class TestCompleteWorkflow(unittest.TestCase):
             "Wash dishes",
             "Wash and dry the dishes",
             int(jordan["user_id"]),
+            "2026-07-25",
+            "high",
         )
 
         with self.assertRaisesRegex(PermissionError, "assignee"):
@@ -122,8 +123,8 @@ class TestCompleteWorkflow(unittest.TestCase):
                 "description": "Wash and dry the dishes",
                 "assignee_id": jordan["user_id"],
                 "status": "complete",
-                "due_date": date.today().isoformat(),
-                "priority": "medium",
+                "due_date": "2026-07-25",
+                "priority": "high",
             },
         )
 
