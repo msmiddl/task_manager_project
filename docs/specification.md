@@ -2,7 +2,7 @@
 
 ## 1. Project overview
 
-TaskHub is a local group-task application. It allows people to create local user profiles, organize profiles into groups, create assigned tasks, view group work, and record task completion. It also offers an AI-generated username suggestion that a person may choose whether to request. Implementing this suggestion feature is required for the MVP, but using it is optional. The core application must remain usable when the AI service is unavailable.
+TaskHub is a local group-task application. It allows people to create local user profiles, organize profiles into groups, create assigned tasks, view group work, and record task completion. It offers an AI-generated username suggestion for the MVP and an approved post-MVP priority recommendation that a person may choose whether to request. Both AI features are optional to use, and the core application must remain usable when the AI service is unavailable.
 
 This specification defines the approved capstone scope without password authentication, formal invitations, real-time synchronization, or cloud deployment.
 
@@ -26,7 +26,7 @@ The MVP has one user type. A group creator may create a group and add existing u
 - **Group member:** A user profile that has been added to a group.
 - **Group creator:** The user profile that created a group. The creator is automatically a group member and is the only member who may add other existing profiles to that group.
 - **Assignee:** The group member responsible for a task.
-- **Core application:** User-profile, group, membership, task, viewing, completion, and persistence functions. The AI username suggestion is not a core function.
+- **Core application:** User-profile, group, membership, task, viewing, completion, and persistence functions. Optional AI suggestions and recommendations are not core functions.
 
 ## 4. Project goals
 
@@ -369,7 +369,7 @@ An AI username suggestion is temporary display data. It becomes user data only i
 - Every task is assigned during creation to one group member.
 - Only the selected assignee profile may mark its task complete.
 - Users manually enter all core data.
-- The AI service is used only for optional username suggestions.
+- The AI service is used only for optional username suggestions and explicitly requested task-priority recommendations.
 - Core functions remain usable without internet access.
 
 ## 13. Constraints
@@ -379,7 +379,7 @@ An AI username suggestion is temporary display data. It becomes user data only i
 - The application must run locally.
 - It must demonstrate Python fundamentals, data handling, functions, error handling, and basic testing.
 - Core application data must remain available after the application closes.
-- Internet access and configured Google API access may be required only for the AI username suggestion.
+- Internet access and configured Google API access may be required only for optional AI username suggestions and task-priority recommendations.
 - One simple local interface is the MVP deliverable.
 - No specific library, database product, interface framework, or architecture is selected by this specification.
 
@@ -431,3 +431,11 @@ Due dates, fixed priority levels, and an internal monthly calendar are now appro
 This approval does not add external calendar synchronization, reminders, due times, recurring tasks, task editing, reassignment, or any other previously excluded feature. Existing TaskHub permissions and one-way completion rules remain unchanged.
 
 The approved migration rule is that each task created before the enhancement receives the local calendar date on which migration runs as its fallback due date and receives `medium` priority. The migration must preserve every existing record and relationship.
+
+## 17. Approved smart-priority and interface enhancement
+
+Optional AI priority recommendations, selected-group dashboard metrics, completion progress, accessible priority and overdue indicators, task filtering and sorting, consistent task cards, and improved success and empty-state messages are approved post-MVP scope. Their detailed requirements and acceptance criteria are defined in [taskhub-smart-priority-ui-enhancement-spec.md](taskhub-smart-priority-ui-enhancement-spec.md). The formerly proposed separate Upcoming tasks section is withdrawn; Task list remains the default detailed view.
+
+This approval extends AI use beyond the MVP username suggestion only for an explicit task-priority recommendation request. The AI may receive only validated task title, validated description, today, due date, the locally calculated baseline priority, and fixed response instructions. It must not receive usernames, group names, assignees, credentials, other tasks, or task history. AI failure must not block manual priority selection or task creation.
+
+The enhancement adds no database fields or dependencies. Recommendations, reasons, dashboard values, filters, and sort selections are temporary or derived data. Existing assignment, membership, access, and completion permissions remain unchanged.

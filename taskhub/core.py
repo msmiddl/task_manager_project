@@ -165,6 +165,219 @@ def validate_task_schedule(
         raise ValueError("The task has an invalid priority.")
 
 
+def calculate_baseline_priority(
+    due_date: str | None,
+    current_date: date,
+) -> str:
+    """Return a local priority baseline for a valid task due date."""
+    validate_task_schedule(due_date, "medium")
+
+    parsed_due_date = date.fromisoformat(str(due_date))
+    days_until_due = (parsed_due_date - current_date).days
+
+    if days_until_due <= 3:
+        return "high"
+    if days_until_due <= 7:
+        return "medium"
+    return "low"
+
+
+def prepare_priority_recommendation_request(
+    title: str,
+    description: str,
+    due_date: str | None,
+    current_date: date,
+) -> dict[str, str]:
+    """Validate and return only fields approved for the AI request."""
+    validate_task_fields(title, description)
+    baseline_priority = calculate_baseline_priority(
+        due_date,
+        current_date,
+    )
+    return {
+        "title": title,
+        "description": description,
+        "current_date": current_date.isoformat(),
+        "due_date": str(due_date),
+        "baseline_priority": baseline_priority,
+    }
+
+
+def validate_ai_priority_recommendation(
+    raw_response: str,
+    baseline_priority: str,
+) -> dict[str, str]:
+    """Return one normalized, allowed AI priority recommendation."""
+    unavailable_message = "AI priority recommendation is unavailable."
+    if not isinstance(raw_response, str):
+        raise ValueError(unavailable_message)
+
+    response_lines = [
+        line.strip()
+        for line in raw_response.splitlines()
+        if line.strip()
+    ]
+    if len(response_lines) != 2:
+        raise ValueError(unavailable_message)
+
+    priority = response_lines[0].lower()
+    reason = response_lines[1]
+    priority_levels = {"low": 0, "medium": 1, "high": 2}
+
+    if priority not in priority_levels:
+        raise ValueError(unavailable_message)
+    if not reason or len(reason) > 120:
+        raise ValueError(unavailable_message)
+    if baseline_priority not in priority_levels:
+        raise ValueError(unavailable_message)
+    if abs(
+        priority_levels[priority] - priority_levels[baseline_priority]
+    ) > 1:
+        raise ValueError(unavailable_message)
+    if baseline_priority == "high" and priority != "high":
+        raise ValueError(unavailable_message)
+
+    return {"priority": priority, "reason": reason}
+
+
+def calculate_group_task_metrics(
+    tasks: list[dict[str, int | str | bool]],
+    current_date: date,
+) -> dict[str, int]:
+    """Return selected-group task counts for the dashboard."""
+    complete_count = 0
+    due_soon_count = 0
+
+    for task in tasks:
+        if task["status"] == "complete":
+            complete_count += 1
+            continue
+
+        due_date = date.fromisoformat(str(task["due_date"]))
+        days_until_due = (due_date - current_date).days
+        if 0 <= days_until_due <= 6:
+            due_soon_count += 1
+
+    total_count = len(tasks)
+    incomplete_count = total_count - complete_count
+    return {
+        "total": total_count,
+        "incomplete": incomplete_count,
+        "complete": complete_count,
+        "due_soon": due_soon_count,
+    }
+
+
+def calculate_completion_progress(
+    tasks: list[dict[str, int | str | bool]],
+) -> dict[str, int | float]:
+    """Return bounded completion values for the dashboard."""
+    total_count = len(tasks)
+    completed_count = sum(
+        1 for task in tasks if task["status"] == "complete"
+    )
+
+    if total_count == 0:
+        completion_ratio = 0.0
+    else:
+        completion_ratio = completed_count / total_count
+
+    bounded_ratio = max(0.0, min(completion_ratio, 1.0))
+    return {
+        "completed": completed_count,
+        "total": total_count,
+        "ratio": bounded_ratio,
+        "percentage": bounded_ratio * 100,
+    }
+
+
+def filter_tasks(
+    tasks: list[dict[str, int | str | bool]],
+    status_filter: str,
+    priority_filter: str,
+) -> list[dict[str, int | str | bool]]:
+    """Return a new task list matching both approved filters."""
+    status_filters = (
+        "All tasks",
+        "Assigned to me",
+        "Incomplete",
+        "Complete",
+    )
+    priority_filters = (
+        "All priorities",
+        "High",
+        "Medium",
+        "Low",
+    )
+    if status_filter not in status_filters:
+        raise ValueError("The task status filter is invalid.")
+    if priority_filter not in priority_filters:
+        raise ValueError("The task priority filter is invalid.")
+
+    filtered_tasks = []
+    for task in tasks:
+        status_matches = status_filter == "All tasks"
+        if status_filter == "Assigned to me":
+            status_matches = bool(task["assigned_to_current_user"])
+        elif status_filter in ("Incomplete", "Complete"):
+            status_matches = task["status"] == status_filter.lower()
+
+        priority_matches = priority_filter == "All priorities"
+        if priority_filter != "All priorities":
+            priority_matches = task["priority"] == priority_filter.lower()
+
+        if status_matches and priority_matches:
+            filtered_tasks.append(task)
+
+    return filtered_tasks
+
+
+def sort_tasks(
+    tasks: list[dict[str, int | str | bool]],
+    sort_by: str,
+) -> list[dict[str, int | str | bool]]:
+    """Return a new task list in one approved display order."""
+    if sort_by == "Due date":
+        return sorted(
+            tasks,
+            key=lambda task: (
+                date.fromisoformat(str(task["due_date"])),
+                int(task["task_id"]),
+            ),
+        )
+
+    if sort_by == "Priority":
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        return sorted(
+            tasks,
+            key=lambda task: (
+                priority_order[str(task["priority"])],
+                int(task["task_id"]),
+            ),
+        )
+
+    if sort_by == "Assignee":
+        return sorted(
+            tasks,
+            key=lambda task: (
+                str(task["assignee_username"]),
+                int(task["task_id"]),
+            ),
+        )
+
+    if sort_by == "Status":
+        status_order = {"incomplete": 0, "complete": 1}
+        return sorted(
+            tasks,
+            key=lambda task: (
+                status_order[str(task["status"])],
+                int(task["task_id"]),
+            ),
+        )
+
+    raise ValueError("The task sort option is invalid.")
+
+
 def create_assigned_task(
     database_path: DatabasePath,
     group_id: int,
@@ -237,6 +450,34 @@ def calculate_task_date_state(
     return ""
 
 
+def format_priority_display(priority: str) -> str:
+    """Return the approved accessible icon-and-text priority label."""
+    priority_labels = {
+        "high": "🔴 High",
+        "medium": "🟡 Medium",
+        "low": "🟢 Low",
+    }
+    try:
+        return priority_labels[priority]
+    except KeyError as error:
+        raise ValueError("The task has an invalid priority.") from error
+
+
+def calculate_overdue_warning(
+    due_date: str,
+    status: str,
+    current_date: date,
+) -> str:
+    """Return the approved warning only for incomplete past tasks."""
+    if status != "incomplete":
+        return ""
+
+    parsed_due_date = date.fromisoformat(due_date)
+    if parsed_due_date < current_date:
+        return "⚠️ Overdue"
+    return ""
+
+
 def get_group_tasks(
     database_path: DatabasePath,
     group_id: int,
@@ -262,6 +503,11 @@ def get_group_tasks(
                 task["assignee_id"] == current_user_id
             ),
             "date_state": calculate_task_date_state(
+                str(task["due_date"]),
+                str(task["status"]),
+                reference_date,
+            ),
+            "overdue_warning": calculate_overdue_warning(
                 str(task["due_date"]),
                 str(task["status"]),
                 reference_date,

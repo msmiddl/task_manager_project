@@ -372,6 +372,138 @@ The first vertical slice implements one complete profile-creation path:
 - **Verification method:** Run focused and full suites, complete the calendar manual checklist, and verify a copied existing database upgrades without loss.
 - **Completion criteria:** CAL-01 through CAL-07 have passing automated and manual evidence, original behavior still passes, and documentation describes the enhancement accurately.
 
+## Phase 8: Smart priority and interface enhancement
+
+### SPUI-T01 — Reconcile project documentation and traceability
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-01 through REQ-SPUI-12
+- **Description:** Approve the enhancement supplement, remove the username-only AI conflict, record implementation decisions, extend the design, and add an ordered task plan. Do not change application behavior.
+- **Files expected to change:** `docs/specification.md`, `docs/design.md`, `docs/tasks.md`, `docs/taskhub-smart-priority-ui-enhancement-spec.md`
+- **Dependencies on earlier tasks:** T37
+- **Verification method:** Review all four documents for consistent scope, component boundaries, requirements, decisions, dependencies, and traceability.
+- **Completion criteria:** Every SPUI requirement maps to an ordered task and no implementation decision blocks SPUI-T02.
+
+### SPUI-T02 — Add baseline-priority calculation
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-01
+- **Description:** Calculate low, medium, or high locally from a validated due date and supplied local date, including overdue dates.
+- **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** SPUI-T01
+- **Verification method:** Unit tests cover overdue and day boundaries 0, 3, 4, 7, and 8 plus missing and invalid dates.
+- **Completion criteria:** Baseline priority is deterministic, validated, and independent of AI or internet access.
+
+### SPUI-T03 — Add AI priority request and response validation
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-02, REQ-SPUI-03, REQ-SPUI-04
+- **Description:** Add the isolated two-line AI request, enforce the approved privacy payload, and validate normalized priority and reason output with controlled failure behavior.
+- **Files expected to change:** `taskhub/ai_service.py`, `taskhub/core.py`, `tests/test_ai_service.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** SPUI-T02
+- **Verification method:** Mocked tests cover payload privacy, all valid priorities, whitespace/capitalization, malformed output, missing configuration, and service failures without live networking.
+- **Completion criteria:** One explicit request can safely produce a validated recommendation without storage access or a live test dependency.
+
+### SPUI-T04 — Integrate AI recommendation into task creation
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-03, REQ-SPUI-04
+- **Description:** Add an explicit recommendation control, temporary input snapshot, stale-result clearing, priority-selector update, override behavior, and nonblocking error feedback.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** SPUI-T03
+- **Verification method:** Manual checks cover request, acceptance, override, input invalidation, assignee-only changes, failure preservation, and no automatic task creation or request.
+- **Completion criteria:** A recommendation is optional, temporary, overridable, and never blocks manual creation.
+
+### SPUI-T05 — Add dashboard metric and progress helpers
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-05, REQ-SPUI-06
+- **Description:** Calculate selected-group totals, due-soon count, completed count, and bounded completion ratio from supplied task data and date.
+- **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** SPUI-T01
+- **Verification method:** Tests cover empty, mixed, overdue, due-soon boundary, partial, and complete collections without mutation.
+- **Completion criteria:** Metrics and progress are deterministic and correct for every approved boundary.
+
+### SPUI-T06 — Render dashboard metrics and progress
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-05, REQ-SPUI-06
+- **Description:** Display four Streamlit metrics, completed/total text, and progress for the selected group without presenting load failures as zeros.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** SPUI-T05
+- **Verification method:** Manual checks cover empty, partial, complete, updated-completion, group-switch, and load-error behavior.
+- **Completion criteria:** The selected-group dashboard accurately displays all approved metrics and progress.
+
+### SPUI-T07 — Add priority and overdue presentation
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-07
+- **Description:** Centralize accessible priority-display text and overdue-warning data, then use it consistently in task and calendar displays.
+- **Files expected to change:** `taskhub/core.py`, `app.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** SPUI-T01
+- **Verification method:** Tests cover all priorities and overdue boundaries; manual checks verify icon-plus-text presentation without storage changes.
+- **Completion criteria:** Every displayed priority uses the approved indicator and only incomplete past tasks show the overdue warning.
+
+### SPUI-T08 — Add filtering and sorting helpers
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-08, REQ-SPUI-09
+- **Description:** Add pure helpers for every approved status/ownership filter, priority filter, sort order, AND combination, and stable task-identifier tie-break.
+- **Files expected to change:** `taskhub/core.py`, `tests/test_core.py`
+- **Dependencies on earlier tasks:** SPUI-T01
+- **Verification method:** Tests cover every option, combined filters, ties, empty and single collections, and original-list nonmutation.
+- **Completion criteria:** Filtering and sorting return correct new display collections without changing tasks or storage.
+
+### SPUI-T09 — Add task filter and sort controls
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-08, REQ-SPUI-09
+- **Description:** Add Streamlit controls using the core helpers, documented defaults, reset-on-user/group-switch behavior, and a no-match message.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** SPUI-T08
+- **Verification method:** Manually verify every choice, combined behavior, no matches, resets, group isolation, and no data mutation.
+- **Completion criteria:** Members can safely filter and sort only the selected group's displayed tasks.
+
+### SPUI-T10 — Withdrawn: upcoming-task grouping and display
+
+- **Status:** Withdrawn by approved scope revision
+- **Requirement IDs supported:** REQ-SPUI-10 (withdrawn)
+- **Description:** The separate Upcoming tasks section was removed to keep the dashboard concise. Group metrics and completion progress remain, and Task list is the default detailed view.
+- **Files expected to change:** `taskhub/core.py`, `app.py`, `tests/test_core.py`, project documentation
+- **Dependencies on earlier tasks:** None
+- **Verification method:** Confirm no Upcoming tasks output or unused grouping helper remains and the Task list is the default view.
+- **Completion criteria:** The application and documents consistently exclude the withdrawn feature.
+
+### SPUI-T11 — Render consistent task cards
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-11
+- **Description:** Replace the loose task-list output with bordered cards containing all required fields, indicators, assignment label, and unchanged completion permissions.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** SPUI-T07, SPUI-T09
+- **Verification method:** Manually verify fields, long descriptions, indicators, assignment labels, permissions, and absence of excluded controls.
+- **Completion criteria:** Every task uses one readable, accessible card layout without changing behavior.
+
+### SPUI-T12 — Add success and empty-state feedback
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-SPUI-12
+- **Description:** Review and standardize approved success and valid-empty messages while preserving controlled error behavior.
+- **Files expected to change:** `app.py`
+- **Dependencies on earlier tasks:** SPUI-T04, SPUI-T06, SPUI-T09, SPUI-T11
+- **Verification method:** Manually verify every required successful action, empty state, failed action, and reasonable next-step message.
+- **Completion criteria:** Success, empty, and error states are distinct, accurate, and complete.
+
+### SPUI-T13 — Complete regression, privacy, and documentation verification
+
+- **Status:** Complete
+- **Requirement IDs supported:** Active REQ-SPUI requirements, excluding withdrawn REQ-SPUI-10
+- **Description:** Extend workflow evidence, update user documentation and the manual checklist, run final privacy and architecture review, and complete one live recommendation check.
+- **Files expected to change:** `tests/test_workflow.py`, `README.md`, `docs/manual-test-checklist.md`, `docs/tasks.md`
+- **Dependencies on earlier tasks:** SPUI-T02 through SPUI-T09 and SPUI-T11 through SPUI-T12
+- **Verification method:** Run focused and full suites, compile and whitespace checks, privacy inspection, live AI check, and the complete enhancement checklist.
+- **Completion criteria:** All active SPUI requirements have passing automated and manual evidence with no regression, secret exposure, dependency, or documentation inconsistency.
+
 ## Requirement-to-task traceability
 
 | Requirement | Supporting tasks |
@@ -392,3 +524,15 @@ The first vertical slice implements one complete profile-creation path:
 | CAL-05 — Display a monthly group calendar | T29, T35, T36, T37 |
 | CAL-06 — Navigate calendar months | T29, T36, T37 |
 | CAL-07 — Retain and migrate scheduling data | T29, T30, T37 |
+| REQ-SPUI-01 — Calculate a baseline priority | SPUI-T01, SPUI-T02, SPUI-T13 |
+| REQ-SPUI-02 — Request an AI priority recommendation | SPUI-T01, SPUI-T03, SPUI-T13 |
+| REQ-SPUI-03 — Validate and apply an AI recommendation | SPUI-T01, SPUI-T03, SPUI-T04, SPUI-T13 |
+| REQ-SPUI-04 — Handle unavailable or stale AI results | SPUI-T01, SPUI-T03, SPUI-T04, SPUI-T13 |
+| REQ-SPUI-05 — Display group dashboard metrics | SPUI-T01, SPUI-T05, SPUI-T06, SPUI-T13 |
+| REQ-SPUI-06 — Display completion progress | SPUI-T01, SPUI-T05, SPUI-T06, SPUI-T13 |
+| REQ-SPUI-07 — Display priority and overdue indicators | SPUI-T01, SPUI-T07, SPUI-T13 |
+| REQ-SPUI-08 — Filter displayed tasks | SPUI-T01, SPUI-T08, SPUI-T09, SPUI-T13 |
+| REQ-SPUI-09 — Sort displayed tasks | SPUI-T01, SPUI-T08, SPUI-T09, SPUI-T13 |
+| REQ-SPUI-10 — Withdrawn | SPUI-T10 scope-revision record |
+| REQ-SPUI-11 — Display clean task cards | SPUI-T01, SPUI-T11, SPUI-T13 |
+| REQ-SPUI-12 — Display success and empty-state messages | SPUI-T01, SPUI-T12, SPUI-T13 |
