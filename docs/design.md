@@ -294,6 +294,17 @@ The smart-priority enhancement keeps the existing four-component architecture an
 
 The existing linear Streamlit workflow is retained. The enhancement does not require a sidebar or full tab redesign. AI output uses exactly two nonblank plain-text lines: lowercase priority first and a reason of at most 120 characters second. Relevant task-input changes clear a recommendation without making another request. Task list is the default detailed view. Filters default to all tasks and all priorities, sorting defaults to earliest due date, and these controls reset when the selected user or group changes. The formerly proposed separate Upcoming tasks section is withdrawn.
 
+### 6.5 Approved on-demand creation interface
+
+`app.py` uses native Streamlit popovers for profile and group creation and a
+collapsed expander for task creation. The task expander allows the due-date
+calendar overlay to work reliably. Each disclosure control coordinates the
+same existing core, storage, and AI functions; it does not reproduce their
+rules. The controls are labeled `Create profile`, `Create group`, and `Create
+task`. Final writes use distinct `Save` buttons inside them. Selection and
+display controls remain outside so returning users can reach their saved work
+without opening a creation form.
+
 ## 7. Error-handling strategy
 
 1. Validate lengths, whitespace, required values, uniqueness, membership, and permissions before saving.

@@ -81,39 +81,33 @@ st.title("TaskHub")
 
 try:
     storage.initialize_storage(DATABASE_PATH)
-
-    username = st.text_input("Username")
-
-    if st.button("Create profile"):
-        try:
-            profile = core.create_profile(DATABASE_PATH, username)
-            st.success(f"Profile created: {profile['username']}")
-        except USER_FACING_ERRORS as error:
-            st.error(str(error))
-
-    st.subheader("Saved profiles")
     profiles = storage.list_users(DATABASE_PATH)
 
-    if profiles:
-        for saved_profile in profiles:
-            st.write(saved_profile["username"])
-    else:
-        st.info(
-            "No profiles yet. Enter a username above to create one."
-        )
+    with st.popover("Create profile"):
+        username = st.text_input("Username")
 
-    st.subheader("Username suggestion")
+        if st.button("Save profile"):
+            try:
+                profile = core.create_profile(DATABASE_PATH, username)
+                st.success(f"Profile created: {profile['username']}")
+            except USER_FACING_ERRORS as error:
+                st.error(str(error))
 
-    if st.button("Suggest a username"):
-        try:
-            raw_suggestion = ai_service.request_username_suggestion()
-            suggestion = core.validate_ai_username_suggestion(
-                raw_suggestion,
-                [profile["username"] for profile in profiles],
-            )
-            st.success(f"Suggested username: {suggestion}")
-        except USER_FACING_ERRORS as error:
-            st.error(str(error))
+        if st.button("Suggest a username"):
+            try:
+                raw_suggestion = ai_service.request_username_suggestion()
+                suggestion = core.validate_ai_username_suggestion(
+                    raw_suggestion,
+                    [profile["username"] for profile in profiles],
+                )
+                st.success(f"Suggested username: {suggestion}")
+            except USER_FACING_ERRORS as error:
+                st.error(str(error))
+
+    profiles = storage.list_users(DATABASE_PATH)
+
+    if not profiles:
+        st.info("No profiles yet. Use Create profile to add one.")
 
     st.subheader("Current user")
     active_user_id = None
@@ -184,18 +178,21 @@ try:
         clear_task_display_settings()
         st.info("Select a current user to view or create groups.")
     else:
-        group_name = st.text_input("Group name")
+        with st.popover("Create group"):
+            group_name = st.text_input("Group name")
 
-        if st.button("Create group"):
-            try:
-                created_group = core.create_group(
-                    DATABASE_PATH,
-                    group_name,
-                    active_user_id,
-                )
-                st.success(f"Group created: {created_group['name']}")
-            except USER_FACING_ERRORS as error:
-                st.error(str(error))
+            if st.button("Save group"):
+                try:
+                    created_group = core.create_group(
+                        DATABASE_PATH,
+                        group_name,
+                        active_user_id,
+                    )
+                    st.success(
+                        f"Group created: {created_group['name']}"
+                    )
+                except USER_FACING_ERRORS as error:
+                    st.error(str(error))
 
         try:
             groups = core.list_user_groups(
@@ -207,8 +204,8 @@ try:
                 st.session_state.pop("selected_group_id", None)
                 clear_task_display_settings()
                 st.info(
-                    "No groups for the current user. Enter a group name "
-                    "above to create one."
+                    "No groups for the current user. Use Create group "
+                    "to add one."
                 )
             else:
                 group_by_id = {
@@ -310,129 +307,129 @@ try:
         except USER_FACING_ERRORS as error:
             st.error(str(error))
 
-    st.subheader("Create task")
 
     if active_group is None:
         st.info("Select a group before creating a task.")
     elif not group_members:
         st.info("The selected group has no available assignees.")
     else:
-        task_title = st.text_input(
-            "Task title",
-            key="task_title",
-            on_change=clear_priority_recommendation,
-        )
-        task_description = st.text_area(
-            "Task description",
-            key="task_description",
-            on_change=clear_priority_recommendation,
-        )
-        member_by_id = {
-            member["user_id"]: member for member in group_members
-        }
-        assignee_ids = list(member_by_id)
-        selected_assignee_id = st.selectbox(
-            "Assignee",
-            options=assignee_ids,
-            index=None,
-            format_func=lambda user_id: member_by_id[user_id]["username"],
-            placeholder="Choose an assignee",
-            key="task_assignee_selector",
-        )
-        selected_due_date = st.date_input(
-            "Due date",
-            value=None,
-            key="task_due_date",
-            on_change=clear_priority_recommendation,
-        )
-
-        recommendation_snapshot = {
-            "title": task_title,
-            "description": task_description,
-            "due_date": (
-                selected_due_date.isoformat()
-                if selected_due_date is not None
-                else None
-            ),
-        }
-        saved_snapshot = st.session_state.get(
-            "ai_priority_input_snapshot"
-        )
-        if (
-            saved_snapshot is not None
-            and saved_snapshot != recommendation_snapshot
-        ):
-            clear_priority_recommendation()
-
-        if st.button("Suggest priority with AI"):
-            clear_priority_recommendation()
-            try:
-                request_fields = (
-                    core.prepare_priority_recommendation_request(
-                        task_title,
-                        task_description,
-                        recommendation_snapshot["due_date"],
-                        date.today(),
-                    )
-                )
-                raw_recommendation = (
-                    ai_service.request_priority_recommendation(
-                        **request_fields
-                    )
-                )
-                recommendation = (
-                    core.validate_ai_priority_recommendation(
-                        raw_recommendation,
-                        request_fields["baseline_priority"],
-                    )
-                )
-                st.session_state["ai_priority_recommendation"] = (
-                    recommendation
-                )
-                st.session_state["ai_priority_input_snapshot"] = (
-                    recommendation_snapshot
-                )
-                st.session_state["task_priority"] = recommendation[
-                    "priority"
-                ].capitalize()
-            except USER_FACING_ERRORS as error:
-                st.error(str(error))
-
-        selected_priority = st.selectbox(
-            "Priority",
-            options=("Low", "Medium", "High"),
-            index=1,
-            key="task_priority",
-        )
-        recommendation = st.session_state.get(
-            "ai_priority_recommendation"
-        )
-        if recommendation is not None:
-            st.info(
-                "AI recommendation: "
-                f"{str(recommendation['priority']).capitalize()} — "
-                f"{recommendation['reason']}"
+        with st.expander("Create task"):
+            task_title = st.text_input(
+                "Task title",
+                key="task_title",
+                on_change=clear_priority_recommendation,
+            )
+            task_description = st.text_area(
+                "Task description",
+                key="task_description",
+                on_change=clear_priority_recommendation,
+            )
+            member_by_id = {
+                member["user_id"]: member for member in group_members
+            }
+            assignee_ids = list(member_by_id)
+            selected_assignee_id = st.selectbox(
+                "Assignee",
+                options=assignee_ids,
+                index=None,
+                format_func=lambda user_id: member_by_id[user_id]["username"],
+                placeholder="Choose an assignee",
+                key="task_assignee_selector",
+            )
+            selected_due_date = st.date_input(
+                "Due date",
+                value=None,
+                key="task_due_date",
+                on_change=clear_priority_recommendation,
             )
 
-        if st.button("Create task"):
-            try:
-                created_task = core.create_assigned_task(
-                    DATABASE_PATH,
-                    int(active_group["group_id"]),
-                    int(active_user_id),
-                    task_title,
-                    task_description,
-                    selected_assignee_id,
-                    (
-                        selected_due_date.isoformat()
-                        if selected_due_date is not None
-                        else None
-                    ),
-                    selected_priority.lower(),
+            recommendation_snapshot = {
+                "title": task_title,
+                "description": task_description,
+                "due_date": (
+                    selected_due_date.isoformat()
+                    if selected_due_date is not None
+                    else None
+                ),
+            }
+            saved_snapshot = st.session_state.get(
+                "ai_priority_input_snapshot"
+            )
+            if (
+                saved_snapshot is not None
+                and saved_snapshot != recommendation_snapshot
+            ):
+                clear_priority_recommendation()
+
+            if st.button("Suggest priority with AI"):
+                clear_priority_recommendation()
+                try:
+                    request_fields = (
+                        core.prepare_priority_recommendation_request(
+                            task_title,
+                            task_description,
+                            recommendation_snapshot["due_date"],
+                            date.today(),
+                        )
+                    )
+                    raw_recommendation = (
+                        ai_service.request_priority_recommendation(
+                            **request_fields
+                        )
+                    )
+                    recommendation = (
+                        core.validate_ai_priority_recommendation(
+                            raw_recommendation,
+                            request_fields["baseline_priority"],
+                        )
+                    )
+                    st.session_state["ai_priority_recommendation"] = (
+                        recommendation
+                    )
+                    st.session_state["ai_priority_input_snapshot"] = (
+                        recommendation_snapshot
+                    )
+                    st.session_state["task_priority"] = recommendation[
+                        "priority"
+                    ].capitalize()
+                except USER_FACING_ERRORS as error:
+                    st.error(str(error))
+
+            selected_priority = st.selectbox(
+                "Priority",
+                options=("Low", "Medium", "High"),
+                index=1,
+                key="task_priority",
+            )
+            recommendation = st.session_state.get(
+                "ai_priority_recommendation"
+            )
+            if recommendation is not None:
+                st.info(
+                    "AI recommendation: "
+                    f"{str(recommendation['priority']).capitalize()} — "
+                    f"{recommendation['reason']}"
                 )
-                st.success(f"Task created: {created_task['title']}")
-            except USER_FACING_ERRORS as error:
-                st.error(str(error))
+
+            if st.button("Save task"):
+                try:
+                    created_task = core.create_assigned_task(
+                        DATABASE_PATH,
+                        int(active_group["group_id"]),
+                        int(active_user_id),
+                        task_title,
+                        task_description,
+                        selected_assignee_id,
+                        (
+                            selected_due_date.isoformat()
+                            if selected_due_date is not None
+                            else None
+                        ),
+                        selected_priority.lower(),
+                    )
+                    st.success(f"Task created: {created_task['title']}")
+                except USER_FACING_ERRORS as error:
+                    st.error(str(error))
 
     st.subheader("Group tasks and calendar")
 

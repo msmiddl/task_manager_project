@@ -18,6 +18,7 @@ TaskHub is a beginner Python capstone for organizing scheduled tasks in small gr
 - Keep application data after TaskHub closes.
 - Request an optional AI-generated username suggestion.
 - Request an optional AI task-priority recommendation and override it before saving.
+- Open profile, group, and task creation forms only when they are needed.
 
 ## Requirements
 
@@ -65,6 +66,12 @@ py -m streamlit run app.py
 ```
 
 Use the local URL shown in the terminal. Keep that terminal open while using TaskHub. Press `Ctrl+C` in the terminal to stop the application.
+
+TaskHub assumes returning users usually want their saved work. Use the
+`Create profile`, `Create group`, or `Create task` control when a creation form
+is needed. Profile and group fields appear in popovers; task fields appear in
+a collapsed panel so the due-date calendar works normally. Selection,
+dashboard, task-list, and calendar controls remain visible without a form.
 
 ## Run tests and project checks
 
@@ -151,5 +158,6 @@ Use [docs/manual-test-checklist.md](docs/manual-test-checklist.md) for final int
 - [Technical design](docs/design.md)
 - [Implementation tasks](docs/tasks.md)
 - [Project guide](PROJECT_GUIDE.md)
+- [On-demand creation UI specification](docs/taskhub-on-demand-creation-ui-spec.md)
 
 The specification is the source of truth for application behavior.

@@ -439,3 +439,12 @@ Optional AI priority recommendations, selected-group dashboard metrics, completi
 This approval extends AI use beyond the MVP username suggestion only for an explicit task-priority recommendation request. The AI may receive only validated task title, validated description, today, due date, the locally calculated baseline priority, and fixed response instructions. It must not receive usernames, group names, assignees, credentials, other tasks, or task history. AI failure must not block manual priority selection or task creation.
 
 The enhancement adds no database fields or dependencies. Recommendations, reasons, dashboard values, filters, and sort selections are temporary or derived data. Existing assignment, membership, access, and completion permissions remain unchanged.
+
+## 18. Approved on-demand creation interface
+
+Profile, group, and task creation forms are approved to appear only after a
+person clicks their labeled creation button. Routine selection, dashboard,
+task-list, and calendar actions remain visible. This presentation-only change
+adds no dependency, database field, business rule, or permission. Detailed
+acceptance criteria are defined in
+[taskhub-on-demand-creation-ui-spec.md](taskhub-on-demand-creation-ui-spec.md).

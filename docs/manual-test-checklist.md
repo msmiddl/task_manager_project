@@ -122,6 +122,17 @@ The automated review was performed in a scratch copy without Git metadata. The `
 - [x] Run the final 127-test suite and compilation check in the student repository.
 - [x] Run `git diff --check` and confirm `.env` and `data/*.db` remain ignored and untracked.
 
+## 10. On-demand creation interface
+
+- [x] Confirm profile, group, and task creation fields are hidden initially.
+- [x] Open `Create profile`; verify username, AI suggestion, and `Save profile`.
+- [x] Confirm profile validation errors and a successful save still work.
+- [x] Select a user, open `Create group`, and verify `Save group` and validation.
+- [x] Select a group, open `Create task`, and verify every task field, AI priority action, due-date calendar, and `Save task`.
+- [x] Confirm unavailable prerequisites show guidance instead of an unusable form.
+- [x] Confirm current-user and group selection, members, dashboard, Task list, filters, cards, and Calendar remain usable without opening a creation form.
+- [x] Restart TaskHub and confirm saved profiles, groups, memberships, and tasks remain.
+
 ## Result
 
 - Date: 2026-07-23
@@ -133,5 +144,6 @@ The automated review was performed in a scratch copy without Git metadata. The `
 - Two-minute demonstration passed: Yes
 - Calendar enhancement passed: Yes
 - Smart-priority interface checks passed: Yes
+- On-demand creation interface checks passed: Yes
 - Final local Git and 127-test checks passed: Yes
 - Notes or unresolved failures: None

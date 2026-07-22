@@ -504,6 +504,16 @@ The first vertical slice implements one complete profile-creation path:
 - **Verification method:** Run focused and full suites, compile and whitespace checks, privacy inspection, live AI check, and the complete enhancement checklist.
 - **Completion criteria:** All active SPUI requirements have passing automated and manual evidence with no regression, secret exposure, dependency, or documentation inconsistency.
 
+### ODUI-T01 — Add on-demand creation controls
+
+- **Status:** Complete
+- **Requirement IDs supported:** REQ-ODUI-01 through REQ-ODUI-04
+- **Description:** Hide profile and group creation behind native Streamlit popovers and task creation behind a collapsed expander that supports the due-date calendar, while leaving routine actions visible.
+- **Files expected to change:** `app.py`, `README.md`, `docs/specification.md`, `docs/design.md`, `docs/taskhub-on-demand-creation-ui-spec.md`, `docs/manual-test-checklist.md`, `docs/tasks.md`
+- **Dependencies on earlier tasks:** Completed MVP, calendar, and active SPUI tasks
+- **Verification method:** Run the full suite and project checks; manually verify initial collapsed state, each reveal/save/error path, prerequisites, routine actions, and persistence.
+- **Completion criteria:** Each creation workflow is accessible from one labeled button, the default page is shorter, and all existing behavior remains correct.
+
 ## Requirement-to-task traceability
 
 | Requirement | Supporting tasks |
@@ -536,3 +546,7 @@ The first vertical slice implements one complete profile-creation path:
 | REQ-SPUI-10 — Withdrawn | SPUI-T10 scope-revision record |
 | REQ-SPUI-11 — Display clean task cards | SPUI-T01, SPUI-T11, SPUI-T13 |
 | REQ-SPUI-12 — Display success and empty-state messages | SPUI-T01, SPUI-T12, SPUI-T13 |
+| REQ-ODUI-01 — Keep the routine interface compact | ODUI-T01 |
+| REQ-ODUI-02 — Reveal profile creation on demand | ODUI-T01 |
+| REQ-ODUI-03 — Reveal group creation on demand | ODUI-T01 |
+| REQ-ODUI-04 — Reveal task creation on demand | ODUI-T01 |
