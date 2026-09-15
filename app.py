@@ -8,6 +8,7 @@ from taskhub import ai_service, core, storage
 
 
 DATABASE_PATH = Path("data/taskhub.db")
+DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 USER_FACING_ERRORS = (
     ValueError,
     LookupError,
