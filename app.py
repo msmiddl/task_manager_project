@@ -1,13 +1,20 @@
 import calendar
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
 from taskhub import ai_service, core, storage
 
 
-DATABASE_PATH = Path("data/taskhub.db")
+if "database_session_id" not in st.session_state:
+    st.session_state["database_session_id"] = uuid4().hex
+
+DATABASE_PATH = storage.build_session_database_path(
+    Path("data"),
+    str(st.session_state["database_session_id"]),
+)
 DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 USER_FACING_ERRORS = (
     ValueError,

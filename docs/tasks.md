@@ -514,6 +514,16 @@ The first vertical slice implements one complete profile-creation path:
 - **Verification method:** Run the full suite and project checks; manually verify initial collapsed state, each reveal/save/error path, prerequisites, routine actions, and persistence.
 - **Completion criteria:** Each creation workflow is accessible from one labeled button, the default page is shorter, and all existing behavior remains correct.
 
+### SI-T01 — Isolate public demonstration sessions
+
+- **Status:** Manual verification pending
+- **Requirement IDs supported:** REQ-SI-01
+- **Description:** Generate one internal random identifier per Streamlit session, validate it in the storage layer, and route that session to its own SQLite file under `data/sessions/`.
+- **Files expected to change:** `app.py`, `taskhub/storage.py`, `tests/test_storage.py`, `README.md`, `docs/specification.md`, `docs/design.md`, `docs/taskhub-session-isolation-spec.md`, `docs/manual-test-checklist.md`, `docs/tasks.md`
+- **Dependencies on earlier tasks:** Completed MVP, deployed Streamlit demonstration, and ODUI-T01
+- **Verification method:** Run the full automated suite and project checks; manually open two independent browser sessions, create distinct profiles in each, and verify cross-session data never appears.
+- **Completion criteria:** Database-path validation passes, existing workflows regress cleanly, normal reruns retain the active session's data, and two independent browser sessions remain isolated.
+
 ## Requirement-to-task traceability
 
 | Requirement | Supporting tasks |
@@ -527,6 +537,7 @@ The first vertical slice implements one complete profile-creation path:
 | REQ-07 — Mark an assigned task complete | T19, T20, T21, T25, T26, T28 |
 | REQ-08 — Retain application data | T04, T06, T08, T11, T14, T19, T24, T26, T27, T28 |
 | REQ-09 — Suggest an example username using AI | T02, T22, T23, T25, T27, T28 |
+| REQ-SI-01 — Isolate public demonstration sessions | SI-T01 |
 | CAL-01 — Create a task with a due date | T29, T30, T31, T32, T37 |
 | CAL-02 — Create a task with a priority | T29, T30, T31, T32, T37 |
 | CAL-03 — Display due dates and priorities | T29, T30, T33, T34, T37 |

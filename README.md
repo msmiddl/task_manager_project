@@ -1,6 +1,6 @@
 # TaskHub
 
-TaskHub is a beginner Python capstone for organizing scheduled tasks in small groups. It runs locally in a Streamlit browser interface and stores profiles, groups, memberships, tasks, assignees, due dates, priorities, and completion statuses in SQLite.
+TaskHub is a beginner Python capstone for organizing scheduled tasks in small groups. It runs in a Streamlit browser interface and stores profiles, groups, memberships, tasks, assignees, due dates, priorities, and completion statuses in SQLite.
 
 ## Features
 
@@ -15,7 +15,7 @@ TaskHub is a beginner Python capstone for organizing scheduled tasks in small gr
 - View the selected group's tasks in a navigable monthly calendar.
 - Label tasks assigned to the selected current profile.
 - Allow only the selected assignee profile to mark a task complete.
-- Keep application data after TaskHub closes.
+- Isolate each public demonstration session in its own temporary database.
 - Request an optional AI-generated username suggestion.
 - Request an optional AI task-priority recommendation and override it before saving.
 - Open profile, group, and task creation forms only when they are needed.
@@ -67,7 +67,7 @@ py -m streamlit run app.py
 
 Use the local URL shown in the terminal. Keep that terminal open while using TaskHub. Press `Ctrl+C` in the terminal to stop the application.
 
-TaskHub assumes returning users usually want their saved work. Use the
+TaskHub keeps routine actions visible. Use the
 `Create profile`, `Create group`, or `Create task` control when a creation form
 is needed. Profile and group fields appear in popovers; task fields appear in
 a collapsed panel so the due-date calendar works normally. Selection,
@@ -96,21 +96,23 @@ git diff --check
 
 No external formatter or linter is configured.
 
-## Saved data and sessions
+## Demonstration data and sessions
 
-TaskHub stores local application data in `data/taskhub.db`. Valid saved profiles, groups, memberships, assignments, due dates, priorities, and completion statuses remain after the application closes and reopens.
+TaskHub creates one SQLite database under `data/sessions/` for each Streamlit visitor session. A random internal identifier selects the database; visitors cannot enter or choose it. Separate browser sessions therefore do not share profiles, groups, memberships, or tasks.
 
-The selected current user and selected group exist only in Streamlit session state. They intentionally reset when TaskHub restarts and must be selected again.
+Data remains available during normal interactions and reruns in the same active Streamlit session. A new browser session, cleared session, application reboot, or Community Cloud redeployment may begin with an empty database. TaskHub is a portfolio demonstration, not a durable hosted task service.
+
+The selected current user and selected group also exist only in Streamlit session state. They reset with the visitor session and must be selected again.
 
 The Task list is the default detailed view. Dashboard metrics, progress, filters, sorting choices, AI recommendation reasons, and interface selections are derived or temporary; they do not add database fields.
 
-A missing database is treated as a new empty application. An existing unreadable or invalid database produces a controlled error and is not repaired or overwritten automatically. Back up important data before changing files in `data/`.
+A missing session database is treated as a new empty demonstration. An existing unreadable or invalid session database produces a controlled error and is not repaired or overwritten automatically. Do not enter personal, confidential, or sensitive information.
 
 ### Verify an existing database copy
 
 TaskHub upgrades older task records without deleting them. A task created before scheduling was added receives the local migration date as its fallback due date and `medium` priority. Repeated startup does not replace existing scheduling values.
 
-Use a copy—not the live database—for a final migration check:
+For legacy local data, use a copy—not the live database—for a migration check:
 
 ```powershell
 Copy-Item data/taskhub.db data/taskhub-migration-check.db -Force

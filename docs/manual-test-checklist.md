@@ -56,13 +56,23 @@ The automated review was performed in a scratch copy without Git metadata. The `
 - [x] Mark the task complete and confirm its status becomes `complete`.
 - [x] Confirm there is no control that returns the task to incomplete.
 
-## 4. Persistence and session reset
+## 4. Legacy local persistence verification
 
 - [x] Stop TaskHub with `Ctrl+C` and restart it.
 - [x] Confirm no current user or group is selected after restart.
 - [x] Confirm Alex, Jordan, Roommates, both memberships, and Wash dishes remain saved.
 - [x] Reselect Jordan and Roommates and confirm Wash dishes remains complete.
 - [x] Confirm a deliberately invalid test database produces a controlled error and is not overwritten. Do not corrupt the demonstration database.
+
+## 4A. Public demonstration session isolation
+
+- [ ] Open TaskHub in one normal browser window and create a uniquely named profile.
+- [ ] Open TaskHub in an incognito/private window and confirm the first profile is absent.
+- [ ] Create a different profile in the private window and confirm it does not appear in the normal window.
+- [ ] Perform a normal interaction in each window and confirm each retains only its own data.
+- [ ] Confirm the interface never displays or asks for the internal session identifier.
+- [ ] Confirm no visitor-entered profile, group, or task from another session is visible.
+- [ ] Explain that session isolation is not authentication and that demonstration data may reset.
 
 ## 5. AI success and failure
 
@@ -78,8 +88,8 @@ The automated review was performed in a scratch copy without Git metadata. The `
 - [x] Confirm TaskHub never requests a password.
 - [x] Confirm the demonstration uses only synthetic, non-sensitive sample data.
 - [x] Explain that profile selection is not authentication.
-- [x] Explain that selected user and group values reset after restart while SQLite data persists.
-- [x] Confirm the API key and `data/taskhub.db` are not included in the submitted files.
+- [x] Explain that public visitor sessions are isolated and may reset while the deployed application remains a demonstration.
+- [x] Confirm the API key and SQLite database files are not included in the submitted files.
 
 ## 7. Two-minute demonstration
 

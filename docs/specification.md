@@ -10,7 +10,7 @@ This specification defines the approved capstone scope without password authenti
 
 Small groups often coordinate responsibilities through verbal reminders, shared notes, or no organized system. These approaches make it difficult to determine which tasks remain incomplete, who is responsible for each task, and whether assigned work has been completed.
 
-TaskHub provides one local record of group members, task assignments, and completion status.
+TaskHub provides one session-isolated demonstration record of group members, task assignments, and completion status.
 
 ## 3. Target user
 
@@ -38,7 +38,7 @@ The MVP will allow a person to:
 - Create an incomplete task with one required assignee from the task's group.
 - View all tasks for a selected group and identify tasks assigned to the current user.
 - Allow only the selected assignee profile to mark its task complete.
-- Retain user, group, membership, and task data after the application closes.
+- Retain user, group, membership, and task data during an active visitor session.
 - Request an example username from an AI service without exposing private credentials.
 - Receive observable error messages when an operation cannot be completed.
 
@@ -58,7 +58,7 @@ The MVP includes:
 8. Creation of every new task with an incomplete status.
 9. A group task view showing title, description, assignee, and status and labeling tasks assigned to the current user.
 10. One-way completion of an assigned task only by its assignee.
-11. Persistence of all core application data after the application closes.
+11. Persistence of all core application data throughout normal reruns in one active visitor session.
 12. An isolated AI feature that suggests an unused, valid example username and fails without preventing use of the core application.
 13. Automated tests for validation and business rules and a manual demonstration checklist for the interface and live AI request.
 14. One simple local user interface. A CLI may be used during development, but a second complete interface is not an MVP deliverable.
@@ -270,22 +270,22 @@ The following are excluded from the MVP:
 - **Empty-data case - Given** the current user has no assigned incomplete tasks, **when** completion options are displayed, **then** a no-assigned-incomplete-tasks message is displayed.
 - **Error case - Given** the completion change cannot be saved, **when** the assignee attempts completion, **then** failure is reported and the task is not displayed as successfully updated.
 
-### REQ-08 - Retain application data
+### REQ-08 - Retain application data during an active session
 
-**User value:** Users need their groups and tasks to remain available between sessions.
+**User value:** Visitors need their groups and tasks to remain available while they demonstrate the application.
 
-**Description:** The application shall retain valid profiles, groups, memberships, tasks, assignees, and statuses after it closes and reopens.
+**Description:** The application shall retain valid profiles, groups, memberships, tasks, assignees, and statuses throughout normal Streamlit reruns in one active visitor session. A separate or restarted session may begin empty.
 
-**Preconditions:** None for startup. Successfully created data is required for the corresponding persistence cases.
+**Preconditions:** None for startup. Successfully created data is required for the corresponding active-session persistence cases.
 
-**Expected result:** Saved data and relationships are available with the same values in a later session.
+**Expected result:** Saved data and relationships remain available with the same values during the active visitor session.
 
 **Acceptance criteria:**
 
-- **Profile persistence - Given** valid profiles were saved, **when** the application closes and reopens, **then** the same profiles are available.
-- **Group persistence - Given** a group and memberships were saved, **when** the application closes and reopens, **then** the group has the same creator and members.
-- **Task persistence - Given** assigned tasks were saved, **when** the application closes and reopens, **then** each task has the same group, title, description, assignee, and status.
-- **Completion persistence - Given** a task was marked complete and saved, **when** the application closes and reopens, **then** it remains complete.
+- **Profile persistence - Given** valid profiles were saved, **when** a normal interaction reruns the script, **then** the same profiles are available.
+- **Group persistence - Given** a group and memberships were saved, **when** a normal interaction reruns the script, **then** the group has the same creator and members.
+- **Task persistence - Given** assigned tasks were saved, **when** a normal interaction reruns the script, **then** each task has the same group, title, description, assignee, and status.
+- **Completion persistence - Given** a task was marked complete and saved, **when** a normal interaction reruns the script, **then** it remains complete.
 - **Empty-data case - Given** no saved data exists, **when** the application starts, **then** empty user and group collections are presented and the person is prompted to create a profile; this is not reported as a failure.
 - **Unreadable-data case - Given** saved data exists but cannot be read or is corrupted, **when** the application starts, **then** a saved-data-unavailable error is displayed and the condition is not silently presented as an empty new application.
 
@@ -305,6 +305,24 @@ The following are excluded from the MVP:
 - **Invalid-result case - Given** the service returns a blank, invalid-length, whitespace-only, or duplicate username, **when** the response is validated, **then** it is not displayed as a usable suggestion and a suggestion-unavailable message is displayed.
 - **Error case - Given** internet access, configuration, or the AI service is unavailable, **when** a person requests a suggestion, **then** an AI-unavailable message is displayed and core functions remain available.
 - **Privacy case - Given** a live suggestion is requested, **when** the manual privacy check is performed, **then** the request contains no password because the MVP does not collect passwords.
+
+### REQ-SI-01 - Isolate public demonstration sessions
+
+**User value:** A portfolio visitor must be able to try TaskHub without seeing or changing content entered by another visitor.
+
+**Description:** The application shall use a separate temporary SQLite database for each Streamlit visitor session. The database selector shall be randomly generated by the application, stored only in session state, and rejected if it is not exactly 32 lowercase hexadecimal characters.
+
+**Preconditions:** The application is running in Streamlit.
+
+**Expected result:** Profiles, groups, memberships, and tasks created in one visitor session are unavailable in a separate visitor session.
+
+**Acceptance criteria:**
+
+- **Isolation case - Given** two independent browser sessions, **when** each creates data, **then** neither session displays the other session's data.
+- **Rerun case - Given** one active session has saved data, **when** a normal Streamlit interaction reruns the script, **then** that session continues using the same database.
+- **Invalid-identifier case - Given** a malformed or path-like identifier, **when** a session database path is requested, **then** it is rejected before storage access.
+- **Reset case - Given** a visitor starts a new Streamlit session, **when** TaskHub loads, **then** it may begin with empty demonstration data.
+- **Security-boundary case - Given** session isolation is active, **when** TaskHub is presented publicly, **then** documentation does not describe it as user authentication or durable cloud storage.
 
 ## 9. Data requirements
 
@@ -378,7 +396,7 @@ An AI username suggestion is temporary display data. It becomes user data only i
 - Development time is approximately two hours per day through July 24, 2026.
 - The application must run locally.
 - It must demonstrate Python fundamentals, data handling, functions, error handling, and basic testing.
-- Core application data must remain available after the application closes.
+- Core application data must remain available throughout the active visitor session.
 - Internet access and configured Google API access may be required only for optional AI username suggestions and task-priority recommendations.
 - One simple local interface is the MVP deliverable.
 - No specific library, database product, interface framework, or architecture is selected by this specification.
@@ -396,7 +414,7 @@ The MVP is done when:
 7. The second profile can be selected and its assignment displays the `Assigned to you` label.
 8. The second profile can mark its assigned task complete, while a nonassignee profile cannot.
 9. The completed task cannot be returned to incomplete.
-10. Profiles, groups, memberships, assignments, and statuses remain available after closing and reopening the application.
+10. Profiles, groups, memberships, assignments, and statuses remain available throughout normal reruns in the active visitor session.
 11. Missing saved data is handled as an empty application, while unreadable or corrupted data produces an error.
 12. The AI feature displays a valid unused username when available and a controlled error when unavailable.
 13. AI failure does not prevent the complete group-task demonstration.

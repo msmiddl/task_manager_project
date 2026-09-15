@@ -17,7 +17,7 @@ The project will use functions and plain records rather than application classes
 
 ### Selected interface: Streamlit
 
-TaskHub will use one Streamlit interface running locally and displayed in a web browser. It will not require cloud deployment.
+TaskHub uses one Streamlit interface displayed in a web browser and supports deployment as a public portfolio demonstration.
 
 Streamlit fits the project and the student’s experience because it provides text fields, buttons, selection boxes, forms, labels, and messages without requiring a large amount of interface code. It also supports a clear two-minute demonstration of user switching, group selection, task creation, and task completion.
 
@@ -219,7 +219,7 @@ The `group_id` and `user_id` pair must be unique.
 | `current_user_id` | `int` or `None` | No at startup | When present, references an existing profile. |
 | `selected_group_id` | `int` or `None` | No at startup | When present, references a group containing the current user. |
 
-These two selections reset whenever TaskHub restarts. Saved profiles, groups, memberships, and tasks do not reset.
+These selections and the session database identifier remain available during normal reruns. A new or restarted visitor session may reset all demonstration data.
 
 ### 5.6 Relationships
 
@@ -243,7 +243,7 @@ These two selections reset whenever TaskHub restarts. Saved profiles, groups, me
 
 ### 6.2 Approved choice: SQLite
 
-TaskHub will use one local SQLite database through Python’s standard `sqlite3` module. No separate database server or external database package is needed.
+TaskHub will use one SQLite database per active Streamlit visitor session through Python’s standard `sqlite3` module. No separate database server or external database package is needed for the public portfolio demonstration.
 
 The database will contain four tables:
 
@@ -266,7 +266,9 @@ SQLite relationship enforcement must be enabled whenever a connection is opened.
 
 Creating a group and adding its creator membership must occur in one **transaction**, meaning both changes succeed or neither remains saved.
 
-The current user and selected group remain in Streamlit session state and are not saved permanently.
+The interface generates a random 32-character hexadecimal identifier once per Streamlit session. `taskhub/storage.py` validates that identifier and maps it to `data/sessions/<identifier>.db`. Because the identifier is generated internally and cannot contain path characters, one session cannot select another session's database through the interface. The current user and selected group remain in the same Streamlit session state and are not saved permanently.
+
+This design provides demonstration-session isolation, not authentication or durable cloud persistence. A new session or Community Cloud restart may begin empty.
 
 ### 6.3 Approved calendar-enhancement design
 
@@ -404,7 +406,7 @@ Tests will use temporary sample data such as Alex, Jordan, Roommates, and Wash d
 
 | Library | Purpose | Why needed | Essential? |
 | --- | --- | --- | --- |
-| `sqlite3` | Local relational storage. | Meets persistence and relationship needs without an external database. | Essential |
+| `sqlite3` | Session-isolated relational storage. | Meets active-session persistence and relationship needs without an external database. | Essential |
 | `unittest` | Automated tests. | Sufficient for the approved test scope. | Essential for verification |
 | `unittest.mock` | Controlled AI responses. | Prevents automated tests from requiring a live service. | Essential for AI tests |
 | `tempfile` | Temporary test databases. | Protects demonstration data. | Essential for storage tests |

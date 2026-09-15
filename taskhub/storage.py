@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -39,6 +40,23 @@ LEGACY_TASK_COLUMNS = {
     "assignee_id",
     "status",
 }
+
+SESSION_IDENTIFIER_PATTERN = re.compile(r"[0-9a-f]{32}")
+
+
+def build_session_database_path(
+    data_directory: str | Path,
+    session_identifier: str,
+) -> Path:
+    """Return a safe SQLite path for one private visitor session."""
+    if SESSION_IDENTIFIER_PATTERN.fullmatch(session_identifier) is None:
+        raise ValueError("The visitor session identifier is invalid.")
+
+    return (
+        Path(data_directory)
+        / "sessions"
+        / f"{session_identifier}.db"
+    )
 
 
 @contextmanager

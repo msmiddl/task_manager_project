@@ -7,6 +7,7 @@ from pathlib import Path
 
 from taskhub.storage import (
     add_group_member,
+    build_session_database_path,
     create_group,
     create_assigned_task,
     complete_task,
@@ -22,6 +23,40 @@ from taskhub.storage import (
     list_users,
     open_connection,
 )
+
+
+class TestSessionDatabasePath(unittest.TestCase):
+    def test_different_sessions_use_different_database_files(self):
+        first_id = "a" * 32
+        second_id = "b" * 32
+
+        first_path = build_session_database_path("data", first_id)
+        second_path = build_session_database_path("data", second_id)
+
+        self.assertEqual(first_path, Path("data/sessions") / f"{first_id}.db")
+        self.assertEqual(
+            second_path,
+            Path("data/sessions") / f"{second_id}.db",
+        )
+        self.assertNotEqual(first_path, second_path)
+
+    def test_invalid_session_identifiers_are_rejected(self):
+        invalid_identifiers = (
+            "",
+            "short",
+            "g" * 32,
+            "../shared",
+            "a" * 31,
+            "a" * 33,
+        )
+
+        for session_identifier in invalid_identifiers:
+            with self.subTest(session_identifier=session_identifier):
+                with self.assertRaisesRegex(ValueError, "invalid"):
+                    build_session_database_path(
+                        "data",
+                        session_identifier,
+                    )
 
 
 def create_legacy_taskhub_database(database_path: Path) -> None:
